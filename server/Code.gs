@@ -8,7 +8,16 @@
 const NAMA_SHEET = 'Pesanan';
 
 function sheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const pr = PropertiesService.getScriptProperties();
+  let ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) {
+    const id = pr.getProperty('SHEET_ID');
+    if (id) ss = SpreadsheetApp.openById(id);
+    else {
+      ss = SpreadsheetApp.create('Pesanan Bus Santri Lirboyo');
+      pr.setProperty('SHEET_ID', ss.getId());
+    }
+  }
   let s = ss.getSheetByName(NAMA_SHEET);
   if (!s) {
     s = ss.insertSheet(NAMA_SHEET);
