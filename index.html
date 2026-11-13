@@ -39,6 +39,9 @@ button{font:inherit;cursor:pointer}
 .s{height:40px;border-radius:8px;border:1px solid var(--g);background:var(--g2);font-weight:700;font-size:14px;color:var(--g)}
 .s.t{background:#e5e5e5;border-color:#ccc;color:#999;cursor:not-allowed}
 .s.p{background:var(--g);color:#fff}
+.s.w{background:#fff3d6;border:1px dashed #c9a35a;color:#9a7a2e;cursor:not-allowed}
+.s.flash{animation:fl 1.2s ease 3}
+@keyframes fl{50%{box-shadow:0 0 0 5px rgba(201,163,90,.7);transform:scale(1.12)}}
 .s.me{background:var(--gold);border-color:#b28a42;color:#000}
 .aisle{display:flex;align-items:center;justify-content:center;font-size:10px;color:#aaa}
 .msg{font-size:13px;margin-top:8px}.err{color:var(--red)}.ok{color:var(--g)}
@@ -85,7 +88,8 @@ a.btn{display:block;text-decoration:none;text-align:center}
     <div class="mut" id="busInfo"></div>
     <div class="legend">
       <span><i style="background:var(--g2);border-color:var(--g)"></i>Kosong</span>
-      <span><i style="background:#e5e5e5"></i>Terisi</span>
+      <span><i style="background:#fff3d6;border-style:dashed;border-color:#c9a35a"></i>Menunggu bayar</span>
+      <span><i style="background:#e5e5e5"></i>Terisi (lunas)</span>
       <span><i style="background:var(--g)"></i>Dipilih</span>
       <span><i style="background:var(--gold)"></i>Kursi Anda</span>
     </div>
@@ -165,12 +169,12 @@ function render(){
   for(let r=0;r<b.baris;r++){
     const n=[1,2,3,4].map(c=>r*4+c);
     const cell=k=>{const t=taken[b.id+'-'+k];
-      const cls=t?(mine&&mine.bus===b.id&&mine.no===k?'me':'t'):(pilih===k?'p':'');
+      const cls=t?(mine&&mine.bus===b.id&&mine.no===k?'me':(t.status==='lunas'?'t':'w')):(pilih===k?'p':'');
       return `<button class="s ${cls}" data-k="${k}" ${t?'disabled':''}>${k}</button>`};
     h+=`<div class="r">${cell(n[0])}${cell(n[1])}<div class="aisle">${r+1}</div>${cell(n[2])}${cell(n[3])}</div>`;
   }
   $('grid').innerHTML=h;
-  document.querySelectorAll('.s:not(.t)').forEach(s=>s.onclick=()=>{pilih=+s.dataset.k;render();});
+  document.querySelectorAll('.s:not([disabled])').forEach(s=>s.onclick=()=>{pilih=+s.dataset.k;render();});
   const p=$('pesan');p.disabled=!pilih||!!mine;
   p.textContent=mine?'Anda sudah memesan':pilih?`Pesan kursi nomor ${pilih} (${b.nama})`:'Pilih kursi dulu';
   showTiket();
@@ -258,7 +262,10 @@ function renderAdminList(){
     <td><button class="link" data-del="${esc(r.bus)}|${r.no}">hapus</button></td></tr>`).join('');
   document.querySelectorAll('[data-st]').forEach(x=>x.onchange=async()=>{
     const [bus,no]=x.dataset.st.split('|');
-    try{await api('status',{pin,bus,no:+no,status:x.value});await muat();await muatAdmin();}catch(e){$('adminMsg').className='msg err';$('adminMsg').textContent=e.message;}
+    try{await api('status',{pin,bus,no:+no,status:x.value});await muat();await muatAdmin();
+      if(x.value==='lunas'){busId=bus;pilih=null;render();const sb=document.querySelector('.s[data-k="'+no+'"]');
+        $('grid').scrollIntoView({behavior:'smooth',block:'center'});if(sb){sb.classList.add('flash');}
+        $('adminMsg').className='msg ok';$('adminMsg').textContent='Lunas tersimpan. Kursi '+no+' ('+bus+') kini abu-abu (terisi).';}}catch(e){$('adminMsg').className='msg err';$('adminMsg').textContent=e.message;}
   });
   document.querySelectorAll('[data-del]').forEach(x=>x.onclick=async()=>{
     if(!confirm('Hapus pesanan ini?'))return;
