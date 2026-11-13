@@ -75,13 +75,13 @@ a.btn{display:block;text-decoration:none;text-align:center}
   <div id="tiket" class="card hide"></div>
 
   <section class="card">
-    <b>1. Isi data sesuai Kartu Santri</b>
-    <label for="nama">Nama (sesuai kartu santri)</label>
+    <b>1. Isi data santri</b>
+    <label for="nama">Nama santri</label>
     <input id="nama" name="nm-santri" autocomplete="off" readonly onfocus="this.removeAttribute('readonly')" placeholder="Nama lengkap">
-    <label for="kartu">Nomor Kartu Santri</label>
-    <input id="kartu" name="no-kartu-santri" type="text" autocomplete="off" readonly onfocus="this.removeAttribute('readonly')" inputmode="numeric" placeholder="Nomor kartu">
+    <label for="pondok">Pondok</label>
+    <select id="pondok" name="pondok-santri"></select>
     <button class="btn sec" id="cekBtn">Cek pesanan saya</button>
-    <div class="mut" style="margin-top:6px">Satu nomor kartu hanya bisa memesan satu kursi per tahun.</div>
+    <div class="mut" style="margin-top:6px">Satu santri (nama + pondok) hanya bisa memesan satu kursi per tahun.</div>
   </section>
 
   <section class="card">
@@ -143,6 +143,7 @@ a.btn{display:block;text-decoration:none;text-align:center}
     <label>No. WhatsApp panitia (mis. 0812xxxxxxx)</label><input id="cfgWa" inputmode="tel">
     <label>Biaya per kursi (mis. Rp 250.000)</label><input id="cfgHarga">
     <label>Cara pembayaran (rekening/tujuan transfer)</label><input id="cfgBayar">
+    <label>Daftar pondok (pisahkan dengan koma)</label><input id="cfgPondok" placeholder="HY, HMC, INDUK, ...">
     <label>Bus untuk tahun ini</label>
     <div id="busEdit"></div>
     <button class="btn sec" id="addBus">+ Tambah bus</button>
@@ -186,7 +187,14 @@ async function muat(){
   }catch(e){$('sub').textContent='Gagal memuat data. Cek sinyal.';}
   render();
 }
+function isiPondok(){
+  const s=$('pondok'),v=s.value,l=(cfg.pondok&&cfg.pondok.length?cfg.pondok:['HY','HMC','INDUK','A-BAQOROH','HMA','MMQ']);
+  const sig=l.join('|');if(s.dataset.sig===sig)return;
+  s.dataset.sig=sig;s.innerHTML='<option value="">-- Pilih pondok --</option>'+l.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+  if(l.includes(v))s.value=v;
+}
 function render(){
+  isiPondok();
   $('thn').textContent='Tahun '+year;
   const bl=busList();if(!bl.find(b=>b.id===busId))busId=bl[0].id;
   $('tabs').innerHTML=bl.map(b=>`<button class="tab ${b.id===busId?'on':''}" data-b="${b.id}">${esc(b.nama)}</button>`).join('');
@@ -212,37 +220,37 @@ function showTiket(){
   if(!mine){t.classList.add('hide');return;}
   const b=busList().find(x=>x.id===mine.bus)||{nama:mine.bus};
   const lunas=mine.status==='lunas',lapor=mine.status==='lapor';
-  const kartu=$('kartu').value.trim(),wa=waNum(cfg.wa);
-  const pesan=`Assalamualaikum, saya sudah membayar kursi bus pulang santri.\nNama: ${mine.nama}\nNo. Kartu: ${kartu}\n${b.nama}, Kursi ${mine.no}\nKode: ${mine.kode}\nMohon dikonfirmasi. Terima kasih.`;
+  const pondok=$('pondok').value,wa=waNum(cfg.wa);
+  const pesan=`Assalamualaikum, saya sudah membayar kursi bus pulang santri.\nNama: ${mine.nama}\nPondok: ${pondok}\n${b.nama}, Kursi ${mine.no}\nKode: ${mine.kode}\nMohon dikonfirmasi. Terima kasih.`;
   t.classList.remove('hide');
-  t.innerHTML=`<div class="tiket">Kursi Anda (tahun ${year})<b class="big">${esc(b.nama)} · No. ${mine.no}</b>${esc(mine.nama)}<br><span class="mut">Kartu ${esc(kartu)}</span><br><span class="mut">Kode booking: <b>${esc(mine.kode)}</b></span>
+  t.innerHTML=`<div class="tiket">Kursi Anda (tahun ${year})<b class="big">${esc(b.nama)} · No. ${mine.no}</b>${esc(mine.nama)}<br><span class="mut">Pondok ${esc(pondok)}</span><br><span class="mut">Kode booking: <b>${esc(mine.kode)}</b></span>
   <div style="margin-top:10px;font-weight:700;color:${lunas?'var(--g)':'var(--red)'}">${STATUS[mine.status]||''}</div>
   ${lunas?'':`<div class="mut" style="margin-top:6px">${cfg.harga?'Biaya: <b>'+esc(cfg.harga)+'</b><br>':''}${cfg.infoBayar?esc(cfg.infoBayar)+'<br>':''}</div>
   ${lapor?'':'<button class="btn" id="lapor">Saya sudah bayar (kabari panitia)</button>'}
   ${wa?`<a class="btn sec" href="https://wa.me/${wa}?text=${encodeURIComponent(pesan)}" target="_blank" rel="noopener">Kirim bukti bayar via WhatsApp</a>`:''}`}</div>`;
-  const l=$('lapor');if(l)l.onclick=async()=>{l.disabled=true;try{const j=await api('lapor',{kartu});mine.status=j.status;showTiket();}catch(e){l.disabled=false;$('msg').className='msg err';$('msg').textContent=e.message;}};
+  const l=$('lapor');if(l)l.onclick=async()=>{l.disabled=true;try{const j=await api('lapor',{nama:mine.nama,pondok});mine.status=j.status;showTiket();}catch(e){l.disabled=false;$('msg').className='msg err';$('msg').textContent=e.message;}};
 }
 async function cekSaya(){
-  const kartu=$('kartu').value.trim();
-  if(!kartu){mine=null;render();return;}
-  try{const j=await api('cek',{kartu});mine=j.pesanan;if(mine&&!$('nama').value)$('nama').value=mine.nama;}
+  const nama=$('nama').value.trim(),pondok=$('pondok').value;
+  if(nama.length<3||!pondok){mine=null;render();return;}
+  try{const j=await api('cek',{nama,pondok});mine=j.pesanan;}
   catch(e){$('msg').className='msg err';$('msg').textContent=e.message;}
   render();
 }
 $('cekBtn').onclick=cekSaya;
 $('pesan').onclick=()=>{
-  const nama=$('nama').value.trim(),kartu=$('kartu').value.trim(),m=$('msg');m.className='msg err';
-  if(nama.length<3){m.textContent='Isi nama sesuai kartu santri.';return;}
-  if(!/^[A-Za-z0-9\-\/\.]{3,30}$/.test(kartu)){m.textContent='Nomor kartu tidak valid.';return;}
+  const nama=$('nama').value.trim(),pondok=$('pondok').value,m=$('msg');m.className='msg err';
+  if(nama.length<3){m.textContent='Isi nama santri.';return;}
+  if(!pondok){m.textContent='Pilih pondok dulu.';return;}
   if(taken[busId+'-'+pilih]){m.textContent='Maaf, kursi baru saja diambil. Pilih kursi lain.';pilih=null;render();return;}
   const bn=(busList().find(x=>x.id===busId)||{}).nama||busId,kb=$('konfirm');
   kb.classList.remove('hide');
-  kb.firstChild.innerHTML=`<b>Konfirmasi kursi</b><p style="font-size:14px">${esc(nama)}<br>Kartu: ${esc(kartu)}<br><b>${esc(bn)} · Kursi ${pilih}</b> (tahun ${year})</p><div class="row"><button class="btn sec" id="kBatal">Ubah</button><button class="btn" id="kOk">Ya, simpan</button></div>`;
+  kb.firstChild.innerHTML=`<b>Konfirmasi kursi</b><p style="font-size:14px">${esc(nama)}<br>Pondok: ${esc(pondok)}<br><b>${esc(bn)} · Kursi ${pilih}</b> (tahun ${year})</p><div class="row"><button class="btn sec" id="kBatal">Ubah</button><button class="btn" id="kOk">Ya, simpan</button></div>`;
   $('kBatal').onclick=()=>kb.classList.add('hide');
   $('kOk').onclick=async()=>{
     $('kOk').disabled=true;
     try{
-      const j=await api('pesan',{bus:busId,no:pilih,nama,kartu});
+      const j=await api('pesan',{bus:busId,no:pilih,nama,pondok});
       kb.classList.add('hide');pilih=null;mine={bus:j.bus,no:j.no,status:j.status,kode:j.kode,nama:j.nama};
       m.className='msg ok';m.textContent='Berhasil! Simpan/tangkap layar tiket Anda.';
       await muat();
@@ -270,6 +278,8 @@ function renderAdmin(){
   $('cfgWa').value=cfg.wa||'';$('cfgHarga').value=cfg.harga||'';$('cfgBayar').value=cfg.infoBayar||'';
   $('cfgWa').oninput=e=>{cfg.wa=e.target.value;cfgDirty=true;};
   $('cfgHarga').oninput=e=>{cfg.harga=e.target.value;cfgDirty=true;};
+  $('cfgPondok').value=(cfg.pondok||[]).join(', ');
+  $('cfgPondok').oninput=e=>{cfg.pondok=e.target.value.split(',').map(x=>x.trim()).filter(Boolean);cfgDirty=true;};
   $('cfgBayar').oninput=e=>{cfg.infoBayar=e.target.value;cfgDirty=true;};
   $('selTahun').innerHTML=cfg.tahun.map(t=>`<option ${t==year?'selected':''}>${t}</option>`).join('');
   $('busEdit').innerHTML=busList().map((b,i)=>`<div class="row" style="margin-bottom:6px">
@@ -284,8 +294,8 @@ function renderAdmin(){
 function renderAdminList(){
   const rows=[...rowsAdmin].sort((a,b)=>String(a.bus).localeCompare(String(b.bus))||a.no-b.no);
   $('cnt').textContent='('+rows.length+')';
-  $('list').innerHTML='<tr><th>Bus</th><th>Kursi</th><th>Nama</th><th>Kartu</th><th>Status</th><th></th></tr>'+
-    rows.map(r=>`<tr><td>${esc(r.bus)}</td><td>${r.no}</td><td>${esc(r.nama)}</td><td>${esc(r.kartu)}</td>
+  $('list').innerHTML='<tr><th>Bus</th><th>Kursi</th><th>Nama</th><th>Pondok</th><th>Status</th><th></th></tr>'+
+    rows.map(r=>`<tr><td>${esc(r.bus)}</td><td>${r.no}</td><td>${esc(r.nama)}</td><td>${esc(r.pondok)}</td>
     <td><select class="mini" data-st="${esc(r.bus)}|${r.no}">${['belum','lapor','lunas'].map(s=>`<option value="${s}" ${r.status===s?'selected':''}>${s}</option>`).join('')}</select></td>
     <td><button class="link" data-del="${esc(r.bus)}|${r.no}">hapus</button></td></tr>`).join('');
   document.querySelectorAll('[data-st]').forEach(x=>x.onchange=async()=>{
@@ -314,7 +324,7 @@ $('saveCfg').onclick=async()=>{
 };
 $('salin').onclick=async()=>{
   const rows=[...rowsAdmin].sort((a,b)=>String(a.bus).localeCompare(String(b.bus))||a.no-b.no);
-  const csv='Bus,Kursi,Nama,No Kartu,Status\n'+rows.map(r=>[r.bus,r.no,'"'+String(r.nama).replace(/"/g,'""')+'"',r.kartu,r.status].join(',')).join('\n');
+  const csv='Bus,Kursi,Nama,Pondok,Status\n'+rows.map(r=>[r.bus,r.no,'"'+String(r.nama).replace(/"/g,'""')+'"',r.pondok,r.status].join(',')).join('\n');
   try{await navigator.clipboard.writeText(csv);$('adminMsg').className='msg ok';$('adminMsg').textContent='Daftar disalin.';}catch(e){$('adminMsg').className='msg err';$('adminMsg').textContent='Gagal menyalin.';}
 };
 

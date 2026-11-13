@@ -21,26 +21,36 @@ function sheet_() {
   let s = ss.getSheetByName(NAMA_SHEET);
   if (!s) {
     s = ss.insertSheet(NAMA_SHEET);
-    s.appendRow(['Tahun', 'Bus', 'Kursi', 'Nama', 'Kartu', 'Hash', 'Status', 'Kode', 'Waktu']);
+    s.appendRow(['Tahun', 'Bus', 'Kursi', 'Nama', 'Pondok', 'Hash', 'Status', 'Kode', 'Waktu']);
     s.setFrozenRows(1);
     s.getRange('A:I').setNumberFormat('@');
   }
+  if (String(s.getRange(1, 5).getValue()) === 'Kartu') s.getRange(1, 5).setValue('Pondok');
   return s;
 }
+const PONDOK_DEFAULT = ['HY', 'HMC', 'INDUK', 'A-BAQOROH', 'HMA', 'MMQ'];
 function props_() { return PropertiesService.getScriptProperties(); }
 function cfgDefault_() {
   const y = new Date().getFullYear();
   const b = {}; b[y] = [{ id: 'bus1', nama: 'Bus 1', tujuan: '', baris: 10 }];
-  return { tahun: [y], aktif: y, bus: b, wa: '', harga: '', infoBayar: '' };
+  return { tahun: [y], aktif: y, bus: b, wa: '', harga: '', infoBayar: '', pondok: PONDOK_DEFAULT.slice() };
 }
 function cfg_() {
   const raw = props_().getProperty('CONFIG');
-  return raw ? JSON.parse(raw) : cfgDefault_();
+  const c = raw ? JSON.parse(raw) : cfgDefault_();
+  if (!Array.isArray(c.pondok) || !c.pondok.length) c.pondok = PONDOK_DEFAULT.slice();
+  return c;
 }
-function hash_(tahun, kartu) {
+function hash_(tahun, nama, pondok) {
+  const n = String(nama).toLowerCase().replace(/\s+/g, ' ').trim();
   const d = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
-    'lirboyo|' + tahun + '|' + String(kartu).trim().toLowerCase());
+    'lirboyo|' + tahun + '|' + n + '|' + String(pondok).trim().toLowerCase());
   return d.map(function (x) { return ('0' + (x & 0xff).toString(16)).slice(-2); }).join('');
+}
+function pondokSah_(c, v) {
+  const x = String(v || '').trim().toLowerCase();
+  const l = (c.pondok || []).filter(function (p) { return String(p).toLowerCase() === x; });
+  return l.length ? String(l[0]) : null;
 }
 function out_(o) {
   return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
@@ -52,7 +62,7 @@ function rows_(tahun) {
   v.forEach(function (r, i) {
     if (String(r[0]) === String(tahun)) {
       out.push({ row: i + 2, tahun: String(r[0]), bus: String(r[1]), no: Number(r[2]), nama: String(r[3]),
-        kartu: String(r[4]), h: String(r[5]), status: String(r[6]), kode: String(r[7]), ts: String(r[8]) });
+        pondok: String(r[4]), h: String(r[5]), status: String(r[6]), kode: String(r[7]), ts: String(r[8]) });
     }
   });
   return out;
@@ -136,42 +146,43 @@ function doPost(e) {
 
 function pesan_(b, c, tahun) {
   const nama = String(b.nama || '').trim();
-  const kartu = String(b.kartu || '').trim();
+  const pondok = pondokSah_(c, b.pondok);
   const no = Number(b.no);
   if (nama.length < 3 || nama.length > 80) return { ok: false, error: 'Nama tidak valid' };
-  if (!/^[A-Za-z0-9\-\/\.]{3,30}$/.test(kartu)) return { ok: false, error: 'Nomor kartu tidak valid' };
+  if (!pondok) return { ok: false, error: 'Pilih pondok dari daftar' };
   const bl = (c.bus[tahun] || []).filter(function (x) { return x.id === b.bus; })[0];
   if (!bl) return { ok: false, error: 'Bus tidak ditemukan' };
   if (!(no >= 1 && no <= bl.baris * 4) || Math.floor(no) !== no) return { ok: false, error: 'Kursi tidak valid' };
-  const h = hash_(tahun, kartu);
+  const h = hash_(tahun, nama, pondok);
   const ada = rows_(tahun);
   if (ada.some(function (r) { return r.bus === b.bus && r.no === no; })) return { ok: false, error: 'Kursi sudah terisi, pilih kursi lain' };
-  if (ada.some(function (r) { return r.h === h; })) return { ok: false, error: 'Nomor kartu ini sudah memesan kursi' };
+  if (ada.some(function (r) { return r.h === h; })) return { ok: false, error: 'Santri dengan nama dan pondok ini sudah memesan kursi' };
   const kode = 'LB' + tahun + '-' + String(b.bus).toUpperCase() + '-' + no;
   const s = sheet_();
   const rg = s.getRange(s.getLastRow() + 1, 1, 1, 9);
   rg.setNumberFormat('@');
-  rg.setValues([[tahun, b.bus, no, nama, kartu, h, 'belum', kode, new Date().toISOString()]]);
-  kirimEmail_('Pesanan kursi baru ' + kode, nama + ' (kartu ' + kartu + ') memesan ' + bl.nama + ' kursi ' + no + ' tahun ' + tahun + '. Status: menunggu pembayaran.');
+  rg.setValues([[tahun, b.bus, no, nama, pondok, h, 'belum', kode, new Date().toISOString()]]);
+  kirimEmail_('Pesanan kursi baru ' + kode, nama + ' (pondok ' + pondok + ') memesan ' + bl.nama + ' kursi ' + no + ' tahun ' + tahun + '. Status: menunggu pembayaran.');
   return { ok: true, kode: kode, bus: b.bus, no: no, status: 'belum', nama: nama };
 }
 
 function cek_(b, tahun) {
-  const kartu = String(b.kartu || '').trim();
-  if (!kartu) return { ok: true, pesanan: null };
-  const h = hash_(tahun, kartu);
+  const pondok = pondokSah_(cfg_(), b.pondok), nama = String(b.nama || '').trim();
+  if (!pondok || nama.length < 3) return { ok: true, pesanan: null };
+  const h = hash_(tahun, nama, pondok);
   const r = rows_(tahun).filter(function (x) { return x.h === h; })[0];
   return { ok: true, pesanan: r ? { bus: r.bus, no: r.no, status: r.status, kode: r.kode, nama: r.nama } : null };
 }
 
 function lapor_(b, tahun) {
-  const kartu = String(b.kartu || '').trim();
-  const h = hash_(tahun, kartu);
+  const pondok = pondokSah_(cfg_(), b.pondok), nama = String(b.nama || '').trim();
+  if (!pondok) return { ok: false, error: 'Pilih pondok dari daftar' };
+  const h = hash_(tahun, nama, pondok);
   const r = rows_(tahun).filter(function (x) { return x.h === h; })[0];
   if (!r) return { ok: false, error: 'Pesanan tidak ditemukan' };
   if (r.status === 'lunas') return { ok: true, status: 'lunas' };
   sheet_().getRange(r.row, 7).setValue('lapor');
-  kirimEmail_('Santri melapor sudah bayar: ' + r.kode, r.nama + ' (kartu ' + r.kartu + ') melapor sudah membayar ' + r.bus + ' kursi ' + r.no + '. Mohon diverifikasi di Panel pengurus.');
+  kirimEmail_('Santri melapor sudah bayar: ' + r.kode, r.nama + ' (pondok ' + r.pondok + ') melapor sudah membayar ' + r.bus + ' kursi ' + r.no + '. Mohon diverifikasi di Panel pengurus.');
   return { ok: true, status: 'lapor' };
 }
 
@@ -195,8 +206,10 @@ function simpanConfig_(b) {
   if (!c || !Array.isArray(c.tahun) || typeof c.bus !== 'object') return { ok: false, error: 'Pengaturan tidak valid' };
   const bersih = {
     tahun: c.tahun.map(Number), aktif: Number(c.aktif), bus: {},
-    wa: String(c.wa || '').slice(0, 20), harga: String(c.harga || '').slice(0, 80), infoBayar: String(c.infoBayar || '').slice(0, 200)
+    wa: String(c.wa || '').slice(0, 20), harga: String(c.harga || '').slice(0, 80), infoBayar: String(c.infoBayar || '').slice(0, 200),
+    pondok: (Array.isArray(c.pondok) ? c.pondok : []).map(function (x) { return String(x).trim().slice(0, 30); }).filter(Boolean).slice(0, 60)
   };
+  if (!bersih.pondok.length) bersih.pondok = PONDOK_DEFAULT.slice();
   Object.keys(c.bus).forEach(function (y) {
     bersih.bus[y] = c.bus[y].map(function (x) {
       return { id: String(x.id).replace(/[^a-z0-9]/gi, '').slice(0, 20), nama: String(x.nama).slice(0, 40),

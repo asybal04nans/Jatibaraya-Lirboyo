@@ -1,5 +1,5 @@
 /* Service worker Bus Santri: halaman bisa dibuka saat sinyal lemah. Data (Apps Script) tidak pernah disimpan. */
-const VERSI = 'bus-santri-v5';
+const VERSI = 'bus-santri-v6';
 const INTI = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/logo.png', 'icons/bus.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSI).then(c => c.addAll(INTI)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSI).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
