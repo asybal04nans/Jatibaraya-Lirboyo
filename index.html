@@ -16,7 +16,8 @@ header{background:linear-gradient(160deg,#143527,#1d4a38 60%,#1f5f4a);color:#fff
 header h1{margin:0;font-size:22px;font-weight:800;font-family:Georgia,serif}
 header h1 span{color:#e5c982}
 header p{margin:4px 0 0;font-size:13px;opacity:.85}
-header svg{display:block;margin:10px auto 0;width:100%;max-width:340px;height:auto}
+header .logo{display:block;margin:0 auto 8px;width:72px;height:72px;border-radius:50%;box-shadow:0 2px 10px rgba(0,0,0,.35)}
+header .busimg{display:block;margin:12px auto 0;width:100%;max-width:380px;height:auto}
 main{max-width:520px;margin:0 auto;padding:14px}
 .card{background:var(--cream);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
 label{display:block;font-size:13px;font-weight:700;margin:10px 0 4px}
@@ -56,20 +57,11 @@ a.btn{display:block;text-decoration:none;text-align:center}
 </head>
 <body>
 <header>
+  <img class="logo" src="icons/logo.png" alt="Logo Jatibaraya">
   <h1>Pulang pakai <span>bis rombongan</span> yuk!</h1>
   <p>Kursi Bus Kepulangan Santri Lirboyo</p>
   <p id="sub" style="font-size:12px;opacity:.7">Memuat…</p>
-  <svg viewBox="0 0 340 110" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <rect x="0" y="94" width="340" height="3" fill="#c9a35a" opacity=".5"/>
-    <rect x="20" y="22" width="300" height="62" rx="14" fill="#fffdf6"/>
-    <rect x="20" y="62" width="300" height="12" fill="#c9a35a"/>
-    <rect x="34" y="32" width="38" height="24" rx="4" fill="#7fb7a0"/><rect x="78" y="32" width="38" height="24" rx="4" fill="#7fb7a0"/>
-    <rect x="122" y="32" width="38" height="24" rx="4" fill="#7fb7a0"/><rect x="166" y="32" width="38" height="24" rx="4" fill="#7fb7a0"/>
-    <rect x="210" y="32" width="38" height="24" rx="4" fill="#7fb7a0"/>
-    <path d="M258 32h50a8 8 0 0 1 8 8v16h-58z" fill="#7fb7a0"/><rect x="296" y="66" width="24" height="8" fill="#1d4a38"/>
-    <circle cx="80" cy="86" r="14" fill="#1f2a24"/><circle cx="80" cy="86" r="6" fill="#ccd"/>
-    <circle cx="260" cy="86" r="14" fill="#1f2a24"/><circle cx="260" cy="86" r="6" fill="#ccd"/>
-  </svg>
+  <img class="busimg" src="icons/bus.png" alt="Bus Rombongan Jatibaraya Lirboyo">
 </header>
 
 <div id="konfirm" class="modal hide"><div class="box"></div></div>
