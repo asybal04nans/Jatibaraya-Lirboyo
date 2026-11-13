@@ -67,9 +67,40 @@ function cekAdmin_(b) {
   if (!pin || String(b.pin) !== String(pin)) { Utilities.sleep(1500); throw new Error('PIN salah'); }
 }
 
+function cekSopir_(b) {
+  const pr = props_();
+  const ok = [pr.getProperty('PIN_SOPIR'), pr.getProperty('PIN_PENGURUS')].filter(Boolean).map(String);
+  if (!ok.length || ok.indexOf(String(b.pin)) < 0) { Utilities.sleep(1500); throw new Error('PIN salah'); }
+}
+function posKey_(tahun, bus) { return 'pos_' + tahun + '_' + String(bus).replace(/[^A-Za-z0-9_\-]/g, ''); }
+function posisiSimpan_(b, tahun) {
+  cekSopir_(b);
+  const c = cfg_();
+  const ada = (c.bus[tahun] || []).some(function (x) { return x.id === b.bus; });
+  if (!ada) return { ok: false, error: 'Bus tidak dikenal' };
+  const lat = Number(b.lat), lng = Number(b.lng);
+  if (!(lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180)) return { ok: false, error: 'Koordinat tidak valid' };
+  const d = { lat: lat, lng: lng, akurasi: Math.round(Number(b.akurasi) || 0),
+    kec: b.kec == null ? null : Math.round(Number(b.kec) * 3.6), ts: Date.now() };
+  CacheService.getScriptCache().put(posKey_(tahun, b.bus), JSON.stringify(d), 21600);
+  return { ok: true };
+}
+function posisiBaca_(tahun) {
+  const c = cfg_(), cache = CacheService.getScriptCache(), out = [];
+  (c.bus[tahun] || []).forEach(function (x) {
+    const raw = cache.get(posKey_(tahun, x.id));
+    if (raw) { const d = JSON.parse(raw); d.bus = x.id; d.nama = x.nama; out.push(d); }
+  });
+  return out;
+}
+
 function doGet(e) {
   try {
     const c = cfg_();
+    if (e.parameter && e.parameter.aksi === 'posisi') {
+      const th = (e.parameter.tahun) || c.aktif;
+      return out_({ ok: true, now: Date.now(), pos: posisiBaca_(th) });
+    }
     const tahun = (e.parameter && e.parameter.tahun) || c.aktif;
     const kursi = rows_(tahun).map(function (r) { return { bus: r.bus, no: r.no, status: r.status }; });
     return out_({ ok: true, config: c, tahun: Number(tahun), kursi: kursi });
@@ -80,6 +111,9 @@ function doPost(e) {
   const lock = LockService.getScriptLock();
   try {
     const b = JSON.parse(e.postData.contents);
+    if (b.aksi === 'posisi') return out_(posisiSimpan_(b, String(b.tahun || cfg_().aktif)));
+    if (b.aksi === 'berhenti') { cekSopir_(b); CacheService.getScriptCache().remove(posKey_(String(b.tahun || cfg_().aktif), b.bus)); return out_({ ok: true }); }
+    if (b.aksi === 'loginSopir') { cekSopir_(b); return out_({ ok: true }); }
     lock.waitLock(20000);
     const c = cfg_();
     const tahun = String(b.tahun || c.aktif);

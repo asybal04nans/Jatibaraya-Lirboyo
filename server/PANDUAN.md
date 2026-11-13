@@ -31,3 +31,9 @@ Santri memesan (status *belum*) > menekan "Saya sudah bayar" (status *lapor*, em
 - PIN diperiksa di server; tidak ada di kode halaman.
 - Santri hanya bisa melihat kursi terisi/kosong dan pesanannya sendiri (lewat nomor kartu). Nama dan kartu orang lain hanya terlihat di Panel pengurus.
 - Jika kode `Code.gs` diubah, buat **New deployment** lagi (atau Manage deployments > Edit > New version).
+
+## Pantau posisi bus (live)
+- Di Script Properties tambahkan `PIN_SOPIR` (PIN khusus sopir/pendamping). Jika tidak diisi, PIN pengurus juga bisa dipakai.
+- Sopir/pendamping membuka web ini di HP di dalam bus, tekan "Sopir / pendamping: bagikan lokasi", masukkan PIN, pilih bus, lalu "Mulai bagikan lokasi". Izinkan akses lokasi, biarkan layar menyala.
+- Orang tua melihat peta di kartu "Pantau posisi bus" (tanpa PIN). Posisi hanya tampil selama bus membagikan lokasi.
+- Setelah mengganti Code.gs: Deploy > Manage deployments > pensil > New version > Deploy.

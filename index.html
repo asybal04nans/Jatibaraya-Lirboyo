@@ -57,6 +57,8 @@ select.mini{width:auto;padding:4px;font-size:13px}
 .modal .box{background:#fff;border-radius:14px;padding:18px;max-width:340px;width:100%}
 a.btn{display:block;text-decoration:none;text-align:center}
 </style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>#peta{height:300px;border-radius:10px;border:1px solid var(--line);margin-top:8px;z-index:0}.posinfo{font-size:13px;margin-top:8px;line-height:1.6}.posinfo b{color:var(--g)}.busmark{background:var(--g);color:#fff;border:2px solid #fff;border-radius:14px;padding:2px 8px;font:700 12px Arial;white-space:nowrap;box-shadow:0 1px 5px rgba(0,0,0,.4)}</style>
 </head>
 <body>
 <header>
@@ -98,6 +100,31 @@ a.btn{display:block;text-decoration:none;text-align:center}
     <div class="msg" id="msg"></div>
   </section>
 
+  <section class="card" id="pantau">
+    <b>📍 Pantau posisi bus</b>
+    <div class="mut">Untuk orang tua dan keluarga santri. Posisi diperbarui tiap beberapa detik saat bus dalam perjalanan.</div>
+    <div id="peta"></div>
+    <div class="posinfo" id="posinfo">Memuat posisi…</div>
+  </section>
+
+  <div style="text-align:center"><button class="link" id="sopirBtn">🚌 Sopir / pendamping: bagikan lokasi</button></div>
+  <section class="card hide" id="sopir">
+    <b>Bagikan lokasi bus</b>
+    <div class="mut">Buka halaman ini di HP yang ada di bus, biarkan layar menyala dan jangan ditutup selama perjalanan.</div>
+    <div id="sopirLogin">
+      <label for="pinSopir">PIN sopir/pendamping</label>
+      <input id="pinSopir" name="pin-sopir" type="password" autocomplete="new-password" placeholder="PIN">
+      <button class="btn" id="sopirOk">Masuk</button>
+    </div>
+    <div id="sopirIsi" class="hide">
+      <label for="sopirBus">Bus yang Anda tumpangi</label>
+      <select id="sopirBus"></select>
+      <button class="btn" id="sopirMulai">Mulai bagikan lokasi</button>
+      <button class="btn sec" id="sopirStop" style="margin-top:8px" disabled>Berhenti</button>
+    </div>
+    <div class="msg" id="sopirMsg"></div>
+  </section>
+
   <div style="text-align:center"><button class="link" id="adminBtn">⚙ Panel pengurus</button></div>
 
   <section class="card hide" id="adminLogin">
@@ -128,6 +155,7 @@ a.btn{display:block;text-decoration:none;text-align:center}
   </section>
 </main>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 // ===== PENGATURAN: tempel URL Web App Google Apps Script di sini =====
 const API = "https://script.google.com/macros/s/AKfycbzwMvoZb4vWC25YxKxX38iw6YJLEd4b7znaVHiqtTBNQTdBp4QSvJn0oUpOtLzw6p59/exec";
@@ -288,6 +316,75 @@ $('salin').onclick=async()=>{
   const rows=[...rowsAdmin].sort((a,b)=>String(a.bus).localeCompare(String(b.bus))||a.no-b.no);
   const csv='Bus,Kursi,Nama,No Kartu,Status\n'+rows.map(r=>[r.bus,r.no,'"'+String(r.nama).replace(/"/g,'""')+'"',r.kartu,r.status].join(',')).join('\n');
   try{await navigator.clipboard.writeText(csv);$('adminMsg').className='msg ok';$('adminMsg').textContent='Daftar disalin.';}catch(e){$('adminMsg').className='msg err';$('adminMsg').textContent='Gagal menyalin.';}
+};
+
+/* ===== Pantau posisi bus ===== */
+let peta=null,marks={},posAda=false,fitSekali=false;
+function initPeta(){
+  if(peta||typeof L==='undefined')return;
+  peta=L.map('peta',{zoomControl:true}).setView([-7.55,111.9],7);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(peta);
+}
+function lalu(ms){const s=Math.max(0,Math.round(ms/1000));if(s<60)return s+' detik lalu';if(s<3600)return Math.round(s/60)+' menit lalu';return Math.round(s/3600)+' jam lalu';}
+async function muatPosisi(){
+  if(API.startsWith('GANTI'))return;
+  try{
+    initPeta();
+    const r=await fetch(API+'?aksi=posisi&tahun='+encodeURIComponent(year)+'&t='+Date.now());
+    const j=await r.json();if(!j.ok)throw new Error(j.error);
+    const bl=busList(),pts=[];
+    const per={};j.pos.forEach(x=>per[x.bus]=x);
+    Object.keys(marks).forEach(id=>{if(!per[id]){peta&&peta.removeLayer(marks[id]);delete marks[id];}});
+    let info='';
+    bl.forEach(b=>{
+      const x=per[b.id];
+      if(!x){info+=`<div>${esc(b.nama)}: <span class="mut">belum membagikan lokasi</span></div>`;return;}
+      const umur=j.now-x.ts,lama=umur>10*60*1000;
+      info+=`<div>${esc(b.nama)}: <b>${lalu(umur)}</b>${x.kec!=null?' · '+x.kec+' km/jam':''}${lama?' <span class="err">(sinyal lama hilang)</span>':''} · <a href="https://www.google.com/maps?q=${x.lat},${x.lng}" target="_blank" rel="noopener">buka di Google Maps</a></div>`;
+      if(peta){
+        const ic=L.divIcon({className:'',html:`<div class="busmark">🚌 ${esc(b.nama)}</div>`,iconSize:null});
+        if(marks[b.id])marks[b.id].setLatLng([x.lat,x.lng]).setIcon(ic);else marks[b.id]=L.marker([x.lat,x.lng],{icon:ic}).addTo(peta);
+        pts.push([x.lat,x.lng]);
+      }
+    });
+    if(peta&&pts.length&&!fitSekali){peta.fitBounds(pts,{maxZoom:14,padding:[40,40]});fitSekali=pts.length>0;}
+    $('posinfo').innerHTML=info||'Belum ada bus.';
+  }catch(e){$('posinfo').textContent='Gagal memuat posisi. Cek sinyal.';}
+}
+window.addEventListener('load',()=>{initPeta();muatPosisi();});
+setInterval(()=>{if(!document.hidden)muatPosisi();},15000);
+
+/* ===== Sopir / pendamping ===== */
+let pinSopir='',watchId=null,lastKirim=0,wake=null;
+$('sopirBtn').onclick=()=>$('sopir').classList.toggle('hide');
+$('sopirOk').onclick=async()=>{
+  pinSopir=$('pinSopir').value;
+  try{await api('loginSopir',{pin:pinSopir});
+    $('sopirLogin').classList.add('hide');$('sopirIsi').classList.remove('hide');$('sopirMsg').textContent='';
+    $('sopirBus').innerHTML=busList().map(b=>`<option value="${esc(b.id)}">${esc(b.nama)}${b.tujuan?' - '+esc(b.tujuan):''}</option>`).join('');
+  }catch(e){$('sopirMsg').className='msg err';$('sopirMsg').textContent=e.message;}
+};
+async function kirimPos(pos){
+  const now=Date.now();if(now-lastKirim<12000)return;lastKirim=now;
+  try{await api('posisi',{pin:pinSopir,bus:$('sopirBus').value,lat:pos.coords.latitude,lng:pos.coords.longitude,akurasi:pos.coords.accuracy,kec:pos.coords.speed});
+    $('sopirMsg').className='msg ok';$('sopirMsg').textContent='Lokasi terkirim '+new Date().toLocaleTimeString('id-ID')+' (akurasi ±'+Math.round(pos.coords.accuracy)+' m)';
+  }catch(e){$('sopirMsg').className='msg err';$('sopirMsg').textContent=e.message;}
+}
+$('sopirMulai').onclick=async()=>{
+  if(!navigator.geolocation){$('sopirMsg').className='msg err';$('sopirMsg').textContent='HP ini tidak mendukung lokasi.';return;}
+  try{if(navigator.wakeLock)wake=await navigator.wakeLock.request('screen');}catch(e){}
+  lastKirim=0;
+  watchId=navigator.geolocation.watchPosition(kirimPos,err=>{$('sopirMsg').className='msg err';$('sopirMsg').textContent='Lokasi tidak bisa dibaca: '+err.message+'. Izinkan akses lokasi di browser.';},{enableHighAccuracy:true,maximumAge:5000,timeout:20000});
+  $('sopirMulai').disabled=true;$('sopirStop').disabled=false;$('sopirBus').disabled=true;
+  $('sopirMsg').className='msg';$('sopirMsg').textContent='Mengambil lokasi…';
+};
+document.addEventListener('visibilitychange',async()=>{if(watchId!==null&&!document.hidden&&navigator.wakeLock){try{wake=await navigator.wakeLock.request('screen');}catch(e){}}});
+$('sopirStop').onclick=async()=>{
+  if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null;}
+  try{if(wake){await wake.release();wake=null;}}catch(e){}
+  try{await api('berhenti',{pin:pinSopir,bus:$('sopirBus').value});}catch(e){}
+  $('sopirMulai').disabled=false;$('sopirStop').disabled=true;$('sopirBus').disabled=false;
+  $('sopirMsg').className='msg';$('sopirMsg').textContent='Berbagi lokasi dihentikan.';
 };
 
 render();muat();
