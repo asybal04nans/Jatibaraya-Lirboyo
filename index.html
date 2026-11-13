@@ -80,9 +80,9 @@ a.btn{display:block;text-decoration:none;text-align:center}
   <section class="card">
     <b>1. Isi data sesuai Kartu Santri</b>
     <label for="nama">Nama (sesuai kartu santri)</label>
-    <input id="nama" autocomplete="off" placeholder="Nama lengkap">
+    <input id="nama" name="nm-santri" autocomplete="off" readonly onfocus="this.removeAttribute('readonly')" placeholder="Nama lengkap">
     <label for="kartu">Nomor Kartu Santri</label>
-    <input id="kartu" autocomplete="off" inputmode="numeric" placeholder="Nomor kartu">
+    <input id="kartu" name="no-kartu-santri" type="text" autocomplete="off" readonly onfocus="this.removeAttribute('readonly')" inputmode="numeric" placeholder="Nomor kartu">
     <button class="btn sec" id="cekBtn">Cek pesanan saya</button>
     <div class="mut" style="margin-top:6px">Satu nomor kartu hanya bisa memesan satu kursi per tahun.</div>
   </section>
@@ -107,7 +107,7 @@ a.btn{display:block;text-decoration:none;text-align:center}
   <section class="card hide" id="adminLogin">
     <b>Masuk pengurus</b>
     <label for="pin">PIN pengurus</label>
-    <input id="pin" type="password" autocomplete="off" placeholder="PIN">
+    <input id="pin" name="pin-pengurus" type="password" autocomplete="new-password" placeholder="PIN">
     <button class="btn" id="pinOk">Masuk</button>
     <div class="msg err" id="pinMsg"></div>
   </section>
