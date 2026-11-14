@@ -30,6 +30,14 @@ button{font:inherit;cursor:pointer}
 #statusBar.flash{animation:fb 1s ease 2}
 @keyframes fb{50%{box-shadow:0 0 0 6px rgba(201,163,90,.6)}}
 .btn.flash{animation:fb 1s ease 3;background:#25d366;color:#fff;border-color:#25d366}
+.aksi{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
+.tile{display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center;padding:14px 8px;border:0;border-radius:14px;color:#fff;background:linear-gradient(145deg,#2a6a52,#1d4a38);box-shadow:0 3px 10px rgba(29,74,56,.35);transition:transform .08s,box-shadow .15s}
+.tile.gold{background:linear-gradient(145deg,#d9b874,#b98f3f);color:#2b2108;box-shadow:0 3px 10px rgba(185,143,63,.4)}
+.tile svg{width:30px;height:30px;fill:currentColor;margin-bottom:2px}
+.tile b{font-size:14.5px;letter-spacing:.2px}
+.tile span{font-size:11.5px;opacity:.85}
+.tile:active{transform:scale(.96);box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.tile.on{outline:3px solid rgba(201,163,90,.9);outline-offset:2px}
 .btn:disabled{opacity:.5}
 button,select,.s{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .btn:active:not(:disabled),.s:active:not([disabled]),.link:active{transform:scale(.96);filter:brightness(.92)}
@@ -116,7 +124,16 @@ a.btn{display:block;text-decoration:none;text-align:center}
     <div class="posinfo" id="posinfo">Memuat posisi…</div>
   </section>
 
-  <div style="text-align:center"><button class="link" id="sopirBtn">🚌 Sopir / pendamping: bagikan lokasi</button></div>
+  <div class="aksi">
+    <button class="tile" id="sopirBtn" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
+      <b>Bagikan Lokasi</b><span>Sopir / pendamping bus</span>
+    </button>
+    <button class="tile gold" id="adminBtn" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1 3 5v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V5l-9-4zm-1 15-4-4 1.4-1.4L11 13.2l4.6-4.6L17 10l-6 6z"/></svg>
+      <b>Panel Pengurus</b><span>Khusus pengurus (PIN)</span>
+    </button>
+  </div>
   <section class="card hide" id="sopir">
     <b>Bagikan lokasi bus</b>
     <div class="mut">Buka halaman ini di HP yang ada di bus, biarkan layar menyala dan jangan ditutup selama perjalanan.</div>
@@ -133,8 +150,6 @@ a.btn{display:block;text-decoration:none;text-align:center}
     </div>
     <div class="msg" id="sopirMsg"></div>
   </section>
-
-  <div style="text-align:center"><button class="link" id="adminBtn">⚙ Panel pengurus</button></div>
 
   <section class="card hide" id="adminLogin">
     <b>Masuk pengurus</b>
@@ -295,8 +310,9 @@ $('pesan').onclick=()=>{
 
 /* ===== Panel pengurus ===== */
 $('adminBtn').onclick=()=>{
-  if(pin){masukAdmin();return;}
-  $('adminLogin').classList.toggle('hide');
+  if(pin){masukAdmin().then(()=>$('admin').scrollIntoView({behavior:'smooth',block:'start'}));return;}
+  const h=$('adminLogin').classList.toggle('hide');$('adminBtn').classList.toggle('on',!h);
+  if(!h){$('adminLogin').scrollIntoView({behavior:'smooth',block:'start'});$('pin').focus({preventScroll:true});}
 };
 $('pinOk').onclick=async()=>{pin=$('pin').value;await masukAdmin();};
 $('keluar').onclick=()=>{pin='';pend={};tampilBar(false);try{sessionStorage.removeItem('pinBus');}catch(e){}$('admin').classList.add('hide');};
@@ -449,7 +465,7 @@ setInterval(()=>{if(!document.hidden)muatPosisi();},15000);
 
 /* ===== Sopir / pendamping ===== */
 let pinSopir='',watchId=null,lastKirim=0,wake=null;
-$('sopirBtn').onclick=()=>$('sopir').classList.toggle('hide');
+$('sopirBtn').onclick=()=>{const h=$('sopir').classList.toggle('hide');$('sopirBtn').classList.toggle('on',!h);if(!h)$('sopir').scrollIntoView({behavior:'smooth',block:'start'});};
 $('sopirOk').onclick=async()=>{
   pinSopir=$('pinSopir').value;
   try{await api('loginSopir',{pin:pinSopir});
