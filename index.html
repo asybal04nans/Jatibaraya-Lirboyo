@@ -341,26 +341,33 @@ $('batalStatus').onclick=()=>{pend={};tampilBar(false);renderAdminList();$('admi
 $('simpanStatus').onclick=async()=>{
   const l=Object.values(pend);if(!l.length&&!cfgDirty)return;
   const m=$('adminMsg'),btn=$('simpanStatus');btn.disabled=true;btn.textContent='Menyimpan…';sibuk++;
-  let lunasTerakhir=null,gagal=[],cfgOk=false;
+  m.className='msg';m.textContent='Menyimpan…';
+  /* langsung ubah tampilan kursi (sebelum server menjawab) */
+  const lunasList=l.filter(x=>x.status==='lunas');
+  l.forEach(x=>{const k=x.bus+'-'+x.no;if(taken[k])taken[k].status=x.status;const row=rowsAdmin.find(r=>r.bus===x.bus&&r.no===x.no);if(row)row.status=x.status;});
+  const last=lunasList[lunasList.length-1];
+  if(last){busId=last.bus;pilih=null;}
+  render();renderAdminList();
+  if(last){
+    $('grid').scrollIntoView({behavior:'smooth',block:'center'});
+    lunasList.forEach(x=>{const sb=document.querySelector('.s[data-k="'+x.no+'"]');if(sb&&busId===x.bus)sb.classList.add('flash');});
+  }
+  let gagal=[],cfgOk=false;
   if(cfgDirty){
     try{cfg.aktif=year;await api('simpanConfig',{pin,config:cfg});cfgDirty=false;cfgOk=true;}
     catch(e){gagal.push('pengaturan: '+e.message);}
   }
   for(const x of l){
-    try{await api('status',{pin,bus:x.bus,no:x.no,status:x.status});
-      const row=rowsAdmin.find(r=>r.bus===x.bus&&r.no===x.no);if(row)row.status=x.status;
-      const k=x.bus+'-'+x.no;if(taken[k])taken[k].status=x.status;
-      if(x.status==='lunas')lunasTerakhir=x;
-    }catch(e){gagal.push(x.bus+' kursi '+x.no+': '+e.message);}
+    try{await api('status',{pin,bus:x.bus,no:x.no,status:x.status});}
+    catch(e){
+      gagal.push(x.bus+' kursi '+x.no+': '+e.message);
+      const k=x.bus+'-'+x.no;if(taken[k])taken[k].status=x.lama;const row=rowsAdmin.find(r=>r.bus===x.bus&&r.no===x.no);if(row)row.status=x.lama;
+    }
   }
   pend={};sibuk--;btn.disabled=false;btn.textContent='Simpan semua';
-  tampilBar(false);renderAdminList();
-  if(gagal.length){m.className='msg err';m.textContent='Gagal menyimpan: '+gagal.join('; ');}
-  else{m.className='msg ok';m.textContent=(cfgOk?'Pengaturan tersimpan (tahun aktif '+year+'). ':'')+(lunasTerakhir?'Lunas tersimpan. Kursi '+lunasTerakhir.no+' kini merah (terisi).':(l.length?'Status tersimpan.':''));}
-  if(lunasTerakhir){busId=lunasTerakhir.bus;pilih=null;render();
-    $('grid').scrollIntoView({behavior:'smooth',block:'center'});
-    const sb=document.querySelector('.s[data-k="'+lunasTerakhir.no+'"]');if(sb)sb.classList.add('flash');}
-  else render();
+  tampilBar(false);renderAdminList();render();
+  if(gagal.length){m.className='msg err';m.textContent='Gagal menyimpan: '+gagal.join('; ')+' (kursi dikembalikan)';}
+  else{m.className='msg ok';m.textContent=(cfgOk?'Pengaturan tersimpan (tahun aktif '+year+'). ':'')+(last?'Lunas tersimpan. Kursi '+last.no+' kini merah (terisi).':(l.length?'Status tersimpan.':''));}
   await muat();await muatAdmin();
 };
 function renderAdminList(){
