@@ -44,7 +44,7 @@ button,select,.s{touch-action:manipulation;-webkit-tap-highlight-color:transpare
 .wheel{width:30px;height:30px;border:2px solid var(--mut);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px}
 .r{display:grid;grid-template-columns:1fr 1fr 34px 1fr 1fr;gap:6px;margin-bottom:6px}
 .s{height:40px;border-radius:8px;border:1px solid var(--g);background:var(--g2);font-weight:700;font-size:14px;color:var(--g)}
-.s.t{background:#e5e5e5;border-color:#ccc;color:#999;cursor:not-allowed}
+.s.t{background:#b3382c;border-color:#8c261c;color:#fff;cursor:not-allowed;position:relative}
 .s.p{background:var(--g);color:#fff}
 .s.w{background:#fff3d6;border:1px dashed #c9a35a;color:#9a7a2e;cursor:not-allowed}
 .s.flash{animation:fl 1.2s ease 3}
@@ -99,7 +99,7 @@ a.btn{display:block;text-decoration:none;text-align:center}
     <div class="legend">
       <span><i style="background:var(--g2);border-color:var(--g)"></i>Kosong</span>
       <span><i style="background:#fff3d6;border-style:dashed;border-color:#c9a35a"></i>Menunggu bayar</span>
-      <span><i style="background:#e5e5e5"></i>Terisi (lunas)</span>
+      <span><i style="background:#b3382c;border-color:#8c261c"></i>Terisi (lunas)</span>
       <span><i style="background:var(--g)"></i>Dipilih</span>
       <span><i style="background:var(--gold)"></i>Kursi Anda</span>
     </div>
@@ -339,7 +339,7 @@ $('simpanStatus').onclick=async()=>{
   pend={};sibuk--;btn.disabled=false;btn.textContent='Simpan status';
   tampilBar(false);renderAdminList();
   if(gagal.length){m.className='msg err';m.textContent='Gagal menyimpan: '+gagal.join('; ');}
-  else{m.className='msg ok';m.textContent=lunasTerakhir?'Lunas tersimpan. Kursi '+lunasTerakhir.no+' kini abu-abu (terisi).':'Status tersimpan.';}
+  else{m.className='msg ok';m.textContent=lunasTerakhir?'Lunas tersimpan. Kursi '+lunasTerakhir.no+' kini merah (terisi).':'Status tersimpan.';}
   if(lunasTerakhir){busId=lunasTerakhir.bus;pilih=null;render();
     $('grid').scrollIntoView({behavior:'smooth',block:'center'});
     const sb=document.querySelector('.s[data-k="'+lunasTerakhir.no+'"]');if(sb)sb.classList.add('flash');}
