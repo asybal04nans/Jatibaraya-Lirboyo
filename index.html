@@ -26,6 +26,9 @@ button{font:inherit;cursor:pointer}
 .btn{background:var(--g);color:#fff;border:0;border-radius:8px;padding:12px 16px;font-weight:700;width:100%;margin-top:12px}
 .btn.sec{background:#fff;color:var(--g);border:1px solid var(--g)}
 .btn:disabled{opacity:.5}
+button,select,.s{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.btn:active:not(:disabled),.s:active:not([disabled]),.link:active{transform:scale(.96);filter:brightness(.92)}
+.s,.btn{transition:transform .08s,filter .08s,background .15s}
 .row{display:flex;gap:8px;align-items:center}
 .tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px}
 .tab{border:1px solid var(--line);background:#fff;border-radius:20px;padding:7px 14px;white-space:nowrap;font-size:14px}
@@ -164,7 +167,7 @@ const API = "https://script.google.com/macros/s/AKfycbzwMvoZb4vWC25YxKxX38iw6YJL
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let cfg={tahun:[new Date().getFullYear()],aktif:new Date().getFullYear(),bus:{},wa:'',harga:'',infoBayar:''};
-let year=cfg.aktif,busId=null,pilih=null,taken={},mine=null,pin='',rowsAdmin=[],cfgDirty=false,pertama=true;
+let year=cfg.aktif,busId=null,pilih=null,taken={},mine=null,pin='',rowsAdmin=[],cfgDirty=false,pertama=true,sibuk=0;
 try{pin=sessionStorage.getItem('pinBus')||'';}catch(e){}
 const busList=()=>cfg.bus[year]||(cfg.bus[year]=[{id:'bus1',nama:'Bus 1',tujuan:'',baris:10}]);
 const waNum=n=>{let d=String(n||'').replace(/\D/g,'');if(d.startsWith('0'))d='62'+d.slice(1);return d;};
@@ -176,6 +179,7 @@ async function api(aksi,data){
   const j=await r.json();if(!j.ok)throw new Error(j.error||'Gagal');return j;
 }
 async function muat(){
+  if(sibuk>0)return;
   if(API.startsWith('GANTI')){$('sub').textContent='Server belum dipasang';render();return;}
   try{
     const r=await fetch(API+'?aksi=data'+(pertama?'':'&tahun='+encodeURIComponent(year))+'&t='+Date.now());
@@ -248,13 +252,19 @@ $('pesan').onclick=()=>{
   kb.firstChild.innerHTML=`<b>Konfirmasi kursi</b><p style="font-size:14px">${esc(nama)}<br>Pondok: ${esc(pondok)}<br><b>${esc(bn)} · Kursi ${pilih}</b> (tahun ${year})</p><div class="row"><button class="btn sec" id="kBatal">Ubah</button><button class="btn" id="kOk">Ya, simpan</button></div>`;
   $('kBatal').onclick=()=>kb.classList.add('hide');
   $('kOk').onclick=async()=>{
-    $('kOk').disabled=true;
+    const key=busId+'-'+pilih,bus=busId,no=pilih;
+    $('kOk').disabled=true;$('kOk').textContent='Menyimpan…';
+    sibuk++;
+    taken[key]={bus,no,status:'belum'};
+    mine={bus,no,status:'belum',kode:'LB'+year+'-'+String(bus).toUpperCase()+'-'+no,nama};
+    kb.classList.add('hide');pilih=null;
+    m.className='msg';m.textContent='Menyimpan pesanan…';render();
     try{
-      const j=await api('pesan',{bus:busId,no:pilih,nama,pondok});
-      kb.classList.add('hide');pilih=null;mine={bus:j.bus,no:j.no,status:j.status,kode:j.kode,nama:j.nama};
+      const j=await api('pesan',{bus,no,nama,pondok});
+      mine={bus:j.bus,no:j.no,status:j.status,kode:j.kode,nama:j.nama};
       m.className='msg ok';m.textContent='Berhasil! Simpan/tangkap layar tiket Anda.';
-      await muat();
-    }catch(e){kb.classList.add('hide');m.textContent=e.message;await muat();}
+    }catch(e){delete taken[key];mine=null;m.className='msg err';m.textContent=e.message;}
+    sibuk--;render();await muat();
   };
 };
 
@@ -299,16 +309,33 @@ function renderAdminList(){
     <td><select class="mini" data-st="${esc(r.bus)}|${r.no}">${['belum','lapor','lunas'].map(s=>`<option value="${s}" ${r.status===s?'selected':''}>${s}</option>`).join('')}</select></td>
     <td><button class="link" data-del="${esc(r.bus)}|${r.no}">hapus</button></td></tr>`).join('');
   document.querySelectorAll('[data-st]').forEach(x=>x.onchange=async()=>{
-    const [bus,no]=x.dataset.st.split('|');
-    try{await api('status',{pin,bus,no:+no,status:x.value});await muat();await muatAdmin();
-      if(x.value==='lunas'){busId=bus;pilih=null;render();const sb=document.querySelector('.s[data-k="'+no+'"]');
-        $('grid').scrollIntoView({behavior:'smooth',block:'center'});if(sb){sb.classList.add('flash');}
-        $('adminMsg').className='msg ok';$('adminMsg').textContent='Lunas tersimpan. Kursi '+no+' ('+bus+') kini abu-abu (terisi).';}}catch(e){$('adminMsg').className='msg err';$('adminMsg').textContent=e.message;}
+    const [bus,no]=x.dataset.st.split('|'),key=bus+'-'+no,baru=x.value,m=$('adminMsg');
+    const row=rowsAdmin.find(r=>r.bus===bus&&String(r.no)===no),lama=row?row.status:'belum';
+    if(baru===lama)return;
+    sibuk++;x.disabled=true;
+    if(row)row.status=baru;if(taken[key])taken[key].status=baru;
+    m.className='msg';m.textContent='Menyimpan…';
+    if(baru==='lunas'){busId=bus;pilih=null;render();
+      $('grid').scrollIntoView({behavior:'smooth',block:'center'});
+      const sb=document.querySelector('.s[data-k="'+no+'"]');if(sb)sb.classList.add('flash');}
+    else render();
+    try{await api('status',{pin,bus,no:+no,status:baru});
+      m.className='msg ok';m.textContent=baru==='lunas'?'Lunas tersimpan. Kursi '+no+' ('+bus+') kini abu-abu (terisi).':'Status tersimpan: '+baru;
+    }catch(e){
+      if(row)row.status=lama;if(taken[key])taken[key].status=lama;x.value=lama;
+      m.className='msg err';m.textContent='Gagal menyimpan: '+e.message;render();
+    }
+    x.disabled=false;sibuk--;await muat();
   });
   document.querySelectorAll('[data-del]').forEach(x=>x.onclick=async()=>{
     if(!confirm('Hapus pesanan ini?'))return;
     const [bus,no]=x.dataset.del.split('|');
-    try{await api('hapus',{pin,bus,no:+no});await muat();await muatAdmin();}catch(e){$('adminMsg').className='msg err';$('adminMsg').textContent=e.message;}
+    const key=bus+'-'+no,adaTaken=taken[key];sibuk++;
+    delete taken[key];rowsAdmin=rowsAdmin.filter(r=>!(r.bus===bus&&String(r.no)===no));render();renderAdminList();
+    $('adminMsg').className='msg';$('adminMsg').textContent='Menghapus…';
+    try{await api('hapus',{pin,bus,no:+no});$('adminMsg').className='msg ok';$('adminMsg').textContent='Pesanan dihapus; kursi kosong kembali.';}
+    catch(e){if(adaTaken)taken[key]=adaTaken;$('adminMsg').className='msg err';$('adminMsg').textContent=e.message;}
+    sibuk--;await muat();await muatAdmin();
   });
 }
 $('selTahun').onchange=async()=>{year=+$('selTahun').value;busId=null;pilih=null;mine=null;await muat();await muatAdmin();renderAdmin();};
