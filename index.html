@@ -29,6 +29,10 @@ button{font:inherit;cursor:pointer}
 .daftar,#daftarTeks{}
 #daftarBox{margin-top:12px;border:2px solid var(--gold);border-radius:12px;padding:12px;background:#fffdf6}
 #daftarTeks{white-space:pre-wrap;word-break:break-word;font:13px/1.45 ui-monospace,Menlo,Consolas,monospace;background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px;max-height:340px;overflow:auto;margin:8px 0}
+#daftarGambarWrap{margin:8px 0;border:1px solid var(--line);border-radius:8px;background:#fff;max-height:70vh;overflow:auto}
+#daftarGambar{display:block;width:100%;height:auto}
+.tabD{padding:8px 12px;border:1px solid var(--g);background:#fff;color:var(--g);border-radius:8px;font-weight:700;width:auto}
+.tabD.on{background:var(--g);color:#fff}
 .btn.ok{background:var(--g);color:#fff}
 .btn.pulse{animation:fb 1s ease 3;background:var(--gold);color:#2b2108}
 #statusBar .btn{margin-top:6px}
@@ -190,11 +194,14 @@ a.btn{display:block;text-decoration:none;text-align:center}
     <div style="overflow-x:auto"><table id="list"></table></div>
     <button class="btn sec" id="salin">Tampilkan &amp; bagikan daftar</button>
     <div id="daftarBox" class="hide">
-      <div class="row" style="justify-content:space-between"><b>Daftar siap dibagikan</b>
-        <select id="filterDaftar" class="mini" style="width:auto"><option value="semua">Semua</option><option value="lunas">Lunas saja</option><option value="belum">Belum lunas</option></select></div>
-      <pre id="daftarTeks"></pre>
+      <div class="row" style="justify-content:space-between;flex-wrap:wrap">
+        <div class="row" style="gap:6px"><button class="mini tabD on" id="tabGambar" type="button">Gambar kursi</button><button class="mini tabD" id="tabTeks" type="button">Teks</button></div>
+        <select id="filterDaftar" class="mini hide" style="width:auto"><option value="semua">Semua</option><option value="lunas">Lunas saja</option><option value="belum">Belum lunas</option></select>
+      </div>
+      <div id="daftarGambarWrap"><img id="daftarGambar" alt="Denah kursi bus beserta nama santri"></div>
+      <pre id="daftarTeks" class="hide"></pre>
       <button class="btn" id="waShare" type="button" style="background:#25d366">Bagikan ke WhatsApp (grup)</button>
-      <div class="row" style="margin-top:8px"><button class="btn sec" id="salinTeks" type="button" style="margin-top:0">Salin teks</button><button class="btn sec" id="tutupDaftar" type="button" style="margin-top:0">Tutup</button></div>
+      <div class="row" style="margin-top:8px"><button class="btn sec" id="salinTeks" type="button" style="margin-top:0">Salin gambar</button><button class="btn sec" id="tutupDaftar" type="button" style="margin-top:0">Tutup</button></div>
       <div class="msg" id="daftarMsg"></div>
     </div>
   </section>
@@ -466,26 +473,129 @@ async function salinKeClipboard(teks){
   try{await Promise.race([navigator.clipboard.writeText(teks),new Promise((_,no)=>setTimeout(no,1200))]);return true;}catch(e){}
   try{const ta=document.createElement('textarea');ta.value=teks;ta.style.cssText='position:fixed;left:-9999px;top:0';document.body.appendChild(ta);ta.focus();ta.select();const ok=document.execCommand('copy');document.body.removeChild(ta);return ok;}catch(e){return false;}
 }
+let tabDaftar='gambar',blobGambar=null,urlGambar=null;
+function bungkus(ctx,teks,maxW,maxBaris){
+  const kata=String(teks).split(/\s+/),baris=[];let cur='';
+  for(const k of kata){const tes=cur?cur+' '+k:k;
+    if(ctx.measureText(tes).width<=maxW)cur=tes;
+    else{if(cur)baris.push(cur);cur=k;
+      while(ctx.measureText(cur).width>maxW&&cur.length>1)cur=cur.slice(0,-1);}
+  }
+  if(cur)baris.push(cur);
+  if(baris.length>maxBaris){baris.length=maxBaris;let l=baris[maxBaris-1];while(ctx.measureText(l+'…').width>maxW&&l.length>1)l=l.slice(0,-1);baris[maxBaris-1]=l+'…';}
+  return baris;
+}
+function gambarKursi(logo){
+  const W=920,P=30,CW=200,CH=76,G=8,AIS=60,hdr=150,busHdr=64,ftr=110;
+  const buses=busList();
+  let H=hdr;buses.forEach(b=>{H+=busHdr+b.baris*(CH+G)+40;});H+=ftr;
+  const c=document.createElement('canvas');c.width=W;c.height=H;
+  const x=c.getContext('2d');
+  x.fillStyle='#fbf7ec';x.fillRect(0,0,W,H);
+  const g=x.createLinearGradient(0,0,W,hdr);g.addColorStop(0,'#1d4a38');g.addColorStop(1,'#2a6a52');
+  x.fillStyle=g;x.fillRect(0,0,W,hdr);
+  if(logo){x.save();x.beginPath();x.arc(P+45,hdr/2,45,0,7);x.clip();x.drawImage(logo,P,hdr/2-45,90,90);x.restore();}
+  x.fillStyle='#fff';x.textBaseline='alphabetic';
+  x.font='bold 34px Arial';x.fillText('Kursi Bus Rombongan',P+115,62);
+  x.fillStyle='#c9a35a';x.font='bold 40px Arial';x.fillText('Jatibaraya Lirboyo '+year,P+115,108);
+  const per={};rowsAdmin.forEach(r=>per[r.bus+'-'+r.no]=r);
+  let y=hdr+10;
+  buses.forEach(b=>{
+    x.fillStyle='#1d4a38';x.font='bold 30px Arial';x.fillText(b.nama+(b.tujuan?' · '+b.tujuan:''),P,y+40);
+    y+=busHdr;
+    x.fillStyle='#8a7a55';x.font='bold 15px Arial';x.textAlign='center';
+    x.fillText('◄ KIRI',P+CW,y-8);x.fillText('KANAN ►',W-P-CW,y-8);x.fillText('DEPAN ▲',W/2,y-8);x.textAlign='left';
+    for(let r=0;r<b.baris;r++){
+      const ry=y+r*(CH+G);
+      x.fillStyle='#8a7a55';x.font='13px Arial';x.textAlign='center';x.fillText(String(r+1),W/2,ry+CH/2+5);x.textAlign='left';
+      for(let k=0;k<4;k++){
+        const no=r*4+k+1;
+        const px=k<2?P+k*(CW+G):W-P-(4-k)*CW-(3-k)*G;
+        const s=per[b.id+'-'+no];
+        const lunas=s&&s.status==='lunas',lapor=s&&s.status==='lapor',ada=!!s;
+        x.setLineDash([]);
+        x.fillStyle=lunas?'#b3382c':ada?'#fff3d6':'#e3efe9';
+        x.strokeStyle=lunas?'#8c261c':ada?'#c9a35a':'#1d4a38';x.lineWidth=2;
+        if(lapor||(ada&&!lunas))x.setLineDash([6,4]);
+        x.beginPath();x.roundRect?x.roundRect(px,ry,CW,CH,10):x.rect(px,ry,CW,CH);x.fill();x.stroke();x.setLineDash([]);
+        x.fillStyle=lunas?'#ffd9d4':'#6b6b6b';x.font='bold 13px Arial';x.fillText(String(no),px+8,ry+17);
+        if(ada){
+          x.fillStyle=lunas?'#fff':'#3a2f10';x.font='bold 16px Arial';x.textAlign='center';
+          const ls=bungkus(x,s.nama,CW-16,2);
+          const ty=ry+(ls.length===1?36:30);
+          ls.forEach((l,i)=>x.fillText(l,px+CW/2,ty+i*18));
+          x.font='13px Arial';x.fillStyle=lunas?'#ffe3df':'#7a5d1a';x.fillText(s.pondok,px+CW/2,ry+CH-8);
+          x.textAlign='left';
+        }else{
+          x.fillStyle='#4a7a66';x.font='15px Arial';x.textAlign='center';x.fillText('kosong',px+CW/2,ry+CH/2+6);x.textAlign='left';
+        }
+      }
+    }
+    y+=b.baris*(CH+G)+40;
+  });
+  const l=rowsAdmin.filter(r=>r.status==='lunas').length,w=rowsAdmin.length-l,kosong=buses.reduce((n,b)=>n+b.baris*4,0)-rowsAdmin.length;
+  const items=[['#b3382c','Terisi (lunas) '+l],['#fff3d6','Menunggu bayar '+w],['#e3efe9','Kosong '+kosong]];
+  let lx=P;y=H-ftr+20;x.font='bold 17px Arial';
+  items.forEach((it,i)=>{x.fillStyle=it[0];x.strokeStyle='#8a7a55';x.lineWidth=1.5;x.fillRect(lx,y,26,26);x.strokeRect(lx,y,26,26);x.fillStyle='#333';x.fillText(it[1],lx+34,y+20);lx+=34+x.measureText(it[1]).width+34;});
+  x.fillStyle='#777';x.font='14px Arial';x.fillText('Per '+new Date().toLocaleString('id-ID',{dateStyle:'long',timeStyle:'short'}),P,H-28);
+  return c;
+}
+function buatGambar(){
+  return new Promise(res=>{
+    const im=new Image();let selesai=false;
+    const kerja=ok=>{if(selesai)return;selesai=true;const c=gambarKursi(ok?im:null);c.toBlob(bl=>{blobGambar=bl;if(urlGambar)URL.revokeObjectURL(urlGambar);urlGambar=URL.createObjectURL(bl);$('daftarGambar').src=urlGambar;res(bl);},'image/png');};
+    im.onload=()=>kerja(true);im.onerror=()=>kerja(false);im.src='icons/logo.png';setTimeout(()=>kerja(false),1500);
+  });
+}
 function isiDaftar(){$('daftarTeks').textContent=teksDaftar($('filterDaftar').value);}
-$('salin').onclick=()=>{
+function pilihTab(tab){
+  tabDaftar=tab;
+  $('tabGambar').classList.toggle('on',tab==='gambar');$('tabTeks').classList.toggle('on',tab==='teks');
+  $('daftarGambarWrap').classList.toggle('hide',tab!=='gambar');$('daftarTeks').classList.toggle('hide',tab==='gambar');
+  $('filterDaftar').classList.toggle('hide',tab==='gambar');
+  $('salinTeks').textContent=tab==='gambar'?'Salin gambar':'Salin teks';
+  $('daftarMsg').textContent='';
+}
+$('tabGambar').onclick=()=>pilihTab('gambar');$('tabTeks').onclick=()=>{isiDaftar();pilihTab('teks');};
+$('salin').onclick=async()=>{
   if(!rowsAdmin.length){$('adminMsg').className='msg err';$('adminMsg').textContent='Belum ada pesanan untuk ditampilkan.';}
-  isiDaftar();$('daftarBox').classList.remove('hide');$('daftarMsg').textContent='';
+  pilihTab('gambar');isiDaftar();$('daftarBox').classList.remove('hide');
   $('daftarBox').scrollIntoView({behavior:'smooth',block:'center'});
+  await buatGambar();
 };
 $('filterDaftar').onchange=isiDaftar;
 $('tutupDaftar').onclick=()=>$('daftarBox').classList.add('hide');
+async function salinGambarClipboard(){
+  try{if(!blobGambar||!window.ClipboardItem||!navigator.clipboard.write)return false;
+    await Promise.race([navigator.clipboard.write([new ClipboardItem({'image/png':blobGambar})]),new Promise((_,no)=>setTimeout(no,1500))]);return true;}catch(e){return false;}
+}
 $('waShare').onclick=async()=>{
-  const teks=teksDaftar($('filterDaftar').value),m=$('daftarMsg');
-  if(navigator.share&&/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)){
-    try{await navigator.share({text:teks});m.className='msg ok';m.textContent='Pilih WhatsApp lalu grup tujuan.';return;}catch(e){if(e&&e.name==='AbortError')return;}
+  const m=$('daftarMsg');
+  if(tabDaftar==='teks'){
+    const teks=teksDaftar($('filterDaftar').value);
+    if(navigator.share&&/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)){
+      try{await navigator.share({text:teks});m.className='msg ok';m.textContent='Pilih WhatsApp lalu grup tujuan.';return;}catch(e){if(e&&e.name==='AbortError')return;}
+    }
+    window.open('https://wa.me/?text='+encodeURIComponent(teks),'_blank','noopener');
+    m.className='msg ok';m.textContent='WhatsApp dibuka. Pilih grup tujuan lalu kirim.';return;
   }
-  window.open('https://wa.me/?text='+encodeURIComponent(teks),'_blank','noopener');
-  m.className='msg ok';m.textContent='WhatsApp dibuka. Pilih grup tujuan lalu kirim.';
+  if(!blobGambar)await buatGambar();
+  const f=new File([blobGambar],'kursi-bus-'+year+'.png',{type:'image/png'});
+  if(navigator.canShare&&navigator.canShare({files:[f]})){
+    try{await navigator.share({files:[f],text:'Kursi Bus Rombongan Jatibaraya Lirboyo '+year});m.className='msg ok';m.textContent='Pilih WhatsApp lalu grup tujuan.';return;}
+    catch(e){if(e&&e.name==='AbortError')return;}
+  }
+  const ok=await salinGambarClipboard();
+  window.open('https://wa.me/','_blank','noopener');
+  m.className='msg ok';
+  m.textContent=ok?'Gambar sudah disalin. Di WhatsApp, buka grup lalu tempel (Ctrl+V) dan kirim.':'WhatsApp dibuka. Tekan lama/klik kanan gambar di atas untuk menyalinnya, lalu tempel di grup.';
 };
 $('salinTeks').onclick=async()=>{
-  const b=$('salinTeks'),ok=await salinKeClipboard(teksDaftar($('filterDaftar').value));
-  b.textContent=ok?'✔ Tersalin':'Gagal, salin manual';setTimeout(()=>b.textContent='Salin teks',2200);
-  if(!ok){const r=document.createRange();r.selectNodeContents($('daftarTeks'));const s=getSelection();s.removeAllRanges();s.addRange(r);}
+  const b=$('salinTeks'),asli=tabDaftar==='gambar'?'Salin gambar':'Salin teks';
+  let ok;
+  if(tabDaftar==='gambar'){if(!blobGambar)await buatGambar();ok=await salinGambarClipboard();}
+  else ok=await salinKeClipboard(teksDaftar($('filterDaftar').value));
+  b.textContent=ok?'✔ Tersalin':'Gagal, tekan lama gambar';setTimeout(()=>b.textContent=asli,2200);
 };
 
 /* ===== Pantau posisi bus ===== */
