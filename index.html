@@ -29,6 +29,7 @@ button{font:inherit;cursor:pointer}
 #statusBar .btn{margin-top:6px}
 #statusBar.flash{animation:fb 1s ease 2}
 @keyframes fb{50%{box-shadow:0 0 0 6px rgba(201,163,90,.6)}}
+.btn.flash{animation:fb 1s ease 3;background:#25d366;color:#fff;border-color:#25d366}
 .btn:disabled{opacity:.5}
 button,select,.s{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .btn:active:not(:disabled),.s:active:not([disabled]),.link:active{transform:scale(.96);filter:brightness(.92)}
@@ -225,6 +226,14 @@ function render(){
   p.textContent=mine?'Anda sudah memesan':pilih?`Pesan kursi nomor ${pilih} (${b.nama})`:'Pilih kursi dulu';
   showTiket();
 }
+let waFlashSampai=0;
+function arahWA(){
+  waFlashSampai=Date.now()+3500;
+  const w=$('waBtn'),tk=$('tiket');
+  const target=w||tk;if(!target||tk.classList.contains('hide'))return;
+  target.scrollIntoView({behavior:'smooth',block:'center'});
+  if(w){w.classList.remove('flash');void w.offsetWidth;w.classList.add('flash');}
+}
 function showTiket(){
   const t=$('tiket');
   if(!mine){t.classList.add('hide');return;}
@@ -237,7 +246,8 @@ function showTiket(){
   <div style="margin-top:10px;font-weight:700;color:${lunas?'var(--g)':'var(--red)'}">${STATUS[mine.status]||''}</div>
   ${lunas?'':`<div class="mut" style="margin-top:6px">${cfg.harga?'Biaya: <b>'+esc(cfg.harga)+'</b><br>':''}${cfg.infoBayar?esc(cfg.infoBayar)+'<br>':''}</div>
   ${lapor?'':'<button class="btn" id="lapor">Saya sudah bayar (kabari panitia)</button>'}
-  ${wa?`<a class="btn sec" href="https://wa.me/${wa}?text=${encodeURIComponent(pesan)}" target="_blank" rel="noopener">Kirim bukti bayar via WhatsApp</a>`:''}`}</div>`;
+  ${wa?`<a class="btn sec" id="waBtn" href="https://wa.me/${wa}?text=${encodeURIComponent(pesan)}" target="_blank" rel="noopener">Kirim bukti bayar via WhatsApp</a>`:''}`}</div>`;
+  if(Date.now()<waFlashSampai&&$('waBtn'))$('waBtn').classList.add('flash');
   const l=$('lapor');if(l)l.onclick=async()=>{l.disabled=true;try{const j=await api('lapor',{nama:mine.nama,pondok});mine.status=j.status;showTiket();}catch(e){l.disabled=false;$('msg').className='msg err';$('msg').textContent=e.message;}};
 }
 async function cekSaya(){
@@ -273,13 +283,13 @@ $('pesan').onclick=()=>{
     taken[key]={bus,no,status:'belum'};
     mine={bus,no,status:'belum',kode:'LB'+year+'-'+String(bus).toUpperCase()+'-'+no,nama};
     kb.classList.add('hide');pilih=null;
-    m.className='msg';m.textContent='Menyimpan pesanan…';render();
+    m.className='msg';m.textContent='Menyimpan pesanan…';render();arahWA();
     try{
       const j=await api('pesan',{bus,no,nama,pondok});
       mine={bus:j.bus,no:j.no,status:j.status,kode:j.kode,nama:j.nama};
-      m.className='msg ok';m.textContent='Berhasil! Simpan/tangkap layar tiket Anda.';
+      m.className='msg ok';m.textContent='Berhasil! Lanjut kabari pengurus lewat tombol WhatsApp di tiket Anda.';
     }catch(e){delete taken[key];mine=null;m.className='msg err';m.textContent=e.message;}
-    sibuk--;render();await muat();
+    sibuk--;render();if(mine)arahWA();await muat();
   };
 };
 
