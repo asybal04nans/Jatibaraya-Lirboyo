@@ -84,6 +84,7 @@ a.btn{display:block;text-decoration:none;text-align:center}
     <label for="pondok">Pondok</label>
     <select id="pondok" name="pondok-santri"></select>
     <button class="btn sec" id="cekBtn">Cek pesanan saya</button>
+    <div class="msg" id="cekMsg"></div>
     <div class="mut" style="margin-top:6px">Satu santri (nama + pondok) hanya bisa memesan satu kursi per tahun.</div>
   </section>
 
@@ -235,11 +236,20 @@ function showTiket(){
   const l=$('lapor');if(l)l.onclick=async()=>{l.disabled=true;try{const j=await api('lapor',{nama:mine.nama,pondok});mine.status=j.status;showTiket();}catch(e){l.disabled=false;$('msg').className='msg err';$('msg').textContent=e.message;}};
 }
 async function cekSaya(){
-  const nama=$('nama').value.trim(),pondok=$('pondok').value;
-  if(nama.length<3||!pondok){mine=null;render();return;}
-  try{const j=await api('cek',{nama,pondok});mine=j.pesanan;}
-  catch(e){$('msg').className='msg err';$('msg').textContent=e.message;}
+  const nama=$('nama').value.trim(),pondok=$('pondok').value,c=$('cekMsg'),btn=$('cekBtn');
+  c.className='msg err';
+  if(nama.length<3){c.textContent='Isi nama santri dulu.';$('nama').focus();return;}
+  if(!pondok){c.textContent='Pilih pondok dulu.';$('pondok').focus();return;}
+  btn.disabled=true;btn.textContent='Memeriksa…';c.className='msg';c.textContent='Memeriksa pesanan…';
+  try{
+    const j=await api('cek',{nama,pondok});mine=j.pesanan;
+    if(mine){const bn=(busList().find(x=>x.id===mine.bus)||{}).nama||mine.bus;
+      c.className='msg ok';c.textContent='Pesanan ditemukan: '+bn+', kursi '+mine.no+' ('+(STATUS[mine.status]||mine.status)+').';}
+    else{c.className='msg err';c.textContent='Belum ada pesanan atas nama ini di pondok ini. Cek penulisan nama, atau silakan pilih kursi di bawah.';}
+  }catch(e){c.className='msg err';c.textContent=e.message;}
+  btn.disabled=false;btn.textContent='Cek pesanan saya';
   render();
+  if(mine&&$('tiket')&&!$('tiket').classList.contains('hide'))$('tiket').scrollIntoView({behavior:'smooth',block:'center'});
 }
 $('cekBtn').onclick=cekSaya;
 $('pesan').onclick=()=>{
