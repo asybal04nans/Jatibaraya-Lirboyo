@@ -26,6 +26,9 @@ button{font:inherit;cursor:pointer}
 .btn{background:var(--g);color:#fff;border:0;border-radius:8px;padding:12px 16px;font-weight:700;width:100%;margin-top:12px}
 .btn.sec{background:#fff;color:var(--g);border:1px solid var(--g)}
 #statusBar{background:#fffdf6;border:2px solid var(--gold);border-radius:10px;padding:10px;margin-top:10px}
+.daftar,#daftarTeks{}
+#daftarBox{margin-top:12px;border:2px solid var(--gold);border-radius:12px;padding:12px;background:#fffdf6}
+#daftarTeks{white-space:pre-wrap;word-break:break-word;font:13px/1.45 ui-monospace,Menlo,Consolas,monospace;background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px;max-height:340px;overflow:auto;margin:8px 0}
 .btn.ok{background:var(--g);color:#fff}
 .btn.pulse{animation:fb 1s ease 3;background:var(--gold);color:#2b2108}
 #statusBar .btn{margin-top:6px}
@@ -185,7 +188,15 @@ a.btn{display:block;text-decoration:none;text-align:center}
     <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
     <b>Daftar pemesan</b> <span class="mut" id="cnt"></span>
     <div style="overflow-x:auto"><table id="list"></table></div>
-    <button class="btn sec" id="salin">Salin daftar (CSV)</button>
+    <button class="btn sec" id="salin">Tampilkan &amp; bagikan daftar</button>
+    <div id="daftarBox" class="hide">
+      <div class="row" style="justify-content:space-between"><b>Daftar siap dibagikan</b>
+        <select id="filterDaftar" class="mini" style="width:auto"><option value="semua">Semua</option><option value="lunas">Lunas saja</option><option value="belum">Belum lunas</option></select></div>
+      <pre id="daftarTeks"></pre>
+      <button class="btn" id="waShare" type="button" style="background:#25d366">Bagikan ke WhatsApp (grup)</button>
+      <div class="row" style="margin-top:8px"><button class="btn sec" id="salinTeks" type="button" style="margin-top:0">Salin teks</button><button class="btn sec" id="unduhCsv" type="button" style="margin-top:0">Unduh CSV</button><button class="btn sec" id="tutupDaftar" type="button" style="margin-top:0">Tutup</button></div>
+      <div class="msg" id="daftarMsg"></div>
+    </div>
   </section>
 </main>
 
@@ -429,22 +440,59 @@ $('addTahun').onclick=async()=>{const y=+$('tahunBaru').value;if(!(y>2000&&y<220
   if(!cfg.bus[y])cfg.bus[y]=JSON.parse(JSON.stringify(busList()));
   tandaiCfg();year=y;busId=null;mine=null;$('tahunBaru').value='';taken={};render();await muatAdmin();renderAdmin();};
 $('addBus').onclick=()=>{const l=busList();l.push({id:'bus'+(Date.now()%1e6),nama:'Bus '+(l.length+1),tujuan:'',baris:10});tandaiCfg();renderAdmin();render();};
-$('salin').onclick=async()=>{
-  const btn=$('salin'),asli='Salin daftar (CSV)';
-  const kembali=()=>setTimeout(()=>{btn.textContent=asli;btn.classList.remove('ok');},2500);
-  const rows=[...rowsAdmin].sort((a,b)=>String(a.bus).localeCompare(String(b.bus))||a.no-b.no);
-  if(!rows.length){btn.textContent='Belum ada pesanan untuk disalin';kembali();return;}
-  const csv='Bus,Kursi,Nama,Pondok,Status\n'+rows.map(r=>[r.bus,r.no,'"'+String(r.nama).replace(/"/g,'""')+'"',r.pondok,r.status].join(',')).join('\n');
-  let ok=false;
-  try{await Promise.race([navigator.clipboard.writeText(csv),new Promise((_,no)=>setTimeout(no,1200))]);ok=true;}catch(e){}
-  if(!ok){try{const ta=document.createElement('textarea');ta.value=csv;ta.style.cssText='position:fixed;left:-9999px;top:0';document.body.appendChild(ta);ta.focus();ta.select();ok=document.execCommand('copy');document.body.removeChild(ta);}catch(e){}}
-  if(ok){btn.textContent='✔ Tersalin ('+rows.length+' pesanan)';btn.classList.add('ok');}
-  else{
-    const u=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));
-    const a=document.createElement('a');a.href=u;a.download='pesanan-bus-'+year+'.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);
-    btn.textContent='Tidak bisa menyalin, file CSV diunduh';
+function barisDaftar(filter){
+  let rows=[...rowsAdmin].sort((a,b)=>String(a.bus).localeCompare(String(b.bus))||a.no-b.no);
+  if(filter==='lunas')rows=rows.filter(r=>r.status==='lunas');
+  if(filter==='belum')rows=rows.filter(r=>r.status!=='lunas');
+  return rows;
+}
+function teksDaftar(filter){
+  const rows=barisDaftar(filter),ik={lunas:'✅',lapor:'⏳',belum:'❌'};
+  const judul={semua:'DAFTAR PEMESAN KURSI BUS',lunas:'DAFTAR LUNAS KURSI BUS',belum:'DAFTAR BELUM LUNAS KURSI BUS'}[filter];
+  const tgl=new Date().toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'});
+  let s='*'+judul+' '+year+'*\n_Rombongan Jatibaraya Lirboyo · '+tgl+'_\n';
+  const per={};rows.forEach(r=>(per[r.bus]=per[r.bus]||[]).push(r));
+  Object.keys(per).forEach(id=>{
+    const b=busList().find(x=>x.id===id)||{nama:id};
+    s+='\n*'+b.nama+(b.tujuan?' - '+b.tujuan:'')+'*\n';
+    per[id].forEach(r=>{s+=r.no+'. '+r.nama+' ('+r.pondok+') '+(ik[r.status]||'')+'\n';});
+  });
+  if(!rows.length)s+='\n(belum ada data)\n';
+  const all=rowsAdmin,l=all.filter(r=>r.status==='lunas').length,w=all.filter(r=>r.status==='lapor').length;
+  s+='\nTotal '+all.length+' pesanan: ✅ lunas '+l+', ⏳ menunggu verifikasi '+w+', ❌ belum bayar '+(all.length-l-w)+'\n(✅ lunas · ⏳ sudah lapor bayar · ❌ belum bayar)';
+  return s;
+}
+function csvDaftar(filter){
+  return 'Bus,Kursi,Nama,Pondok,Status\n'+barisDaftar(filter).map(r=>[r.bus,r.no,'"'+String(r.nama).replace(/"/g,'""')+'"',r.pondok,r.status].join(',')).join('\n');
+}
+async function salinKeClipboard(teks){
+  try{await Promise.race([navigator.clipboard.writeText(teks),new Promise((_,no)=>setTimeout(no,1200))]);return true;}catch(e){}
+  try{const ta=document.createElement('textarea');ta.value=teks;ta.style.cssText='position:fixed;left:-9999px;top:0';document.body.appendChild(ta);ta.focus();ta.select();const ok=document.execCommand('copy');document.body.removeChild(ta);return ok;}catch(e){return false;}
+}
+function isiDaftar(){$('daftarTeks').textContent=teksDaftar($('filterDaftar').value);}
+$('salin').onclick=()=>{
+  if(!rowsAdmin.length){$('adminMsg').className='msg err';$('adminMsg').textContent='Belum ada pesanan untuk ditampilkan.';}
+  isiDaftar();$('daftarBox').classList.remove('hide');$('daftarMsg').textContent='';
+  $('daftarBox').scrollIntoView({behavior:'smooth',block:'center'});
+};
+$('filterDaftar').onchange=isiDaftar;
+$('tutupDaftar').onclick=()=>$('daftarBox').classList.add('hide');
+$('waShare').onclick=async()=>{
+  const teks=teksDaftar($('filterDaftar').value),m=$('daftarMsg');
+  if(navigator.share&&/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)){
+    try{await navigator.share({text:teks});m.className='msg ok';m.textContent='Pilih WhatsApp lalu grup tujuan.';return;}catch(e){if(e&&e.name==='AbortError')return;}
   }
-  kembali();
+  window.open('https://wa.me/?text='+encodeURIComponent(teks),'_blank','noopener');
+  m.className='msg ok';m.textContent='WhatsApp dibuka. Pilih grup tujuan lalu kirim.';
+};
+$('salinTeks').onclick=async()=>{
+  const b=$('salinTeks'),ok=await salinKeClipboard(teksDaftar($('filterDaftar').value));
+  b.textContent=ok?'✔ Tersalin':'Gagal, salin manual';setTimeout(()=>b.textContent='Salin teks',2200);
+  if(!ok){const r=document.createRange();r.selectNodeContents($('daftarTeks'));const s=getSelection();s.removeAllRanges();s.addRange(r);}
+};
+$('unduhCsv').onclick=()=>{
+  const u=URL.createObjectURL(new Blob(['﻿'+csvDaftar($('filterDaftar').value)],{type:'text/csv;charset=utf-8'}));
+  const a=document.createElement('a');a.href=u;a.download='pesanan-bus-'+year+'.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);
 };
 
 /* ===== Pantau posisi bus ===== */
