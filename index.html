@@ -25,6 +25,10 @@ input,select{width:100%;padding:11px;border:1px solid var(--line);border-radius:
 button{font:inherit;cursor:pointer}
 .btn{background:var(--g);color:#fff;border:0;border-radius:8px;padding:12px 16px;font-weight:700;width:100%;margin-top:12px}
 .btn.sec{background:#fff;color:var(--g);border:1px solid var(--g)}
+#statusBar{position:sticky;bottom:8px;background:#fffdf6;border:2px solid var(--gold);border-radius:10px;padding:10px;margin-top:10px;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+#statusBar .btn{margin-top:6px}
+#statusBar.flash{animation:fb 1s ease 2}
+@keyframes fb{50%{box-shadow:0 0 0 6px rgba(201,163,90,.6)}}
 .btn:disabled{opacity:.5}
 button,select,.s{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .btn:active:not(:disabled),.s:active:not([disabled]),.link:active{transform:scale(.96);filter:brightness(.92)}
@@ -156,6 +160,7 @@ a.btn{display:block;text-decoration:none;text-align:center}
     <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
     <b>Daftar pemesan</b> <span class="mut" id="cnt"></span>
     <div style="overflow-x:auto"><table id="list"></table></div>
+    <div id="statusBar" class="hide"><div class="mut" id="statusInfo"></div><div class="row"><button class="btn sec" id="batalStatus">Batal</button><button class="btn" id="simpanStatus">Simpan status</button></div></div>
     <button class="btn sec" id="salin">Salin daftar (CSV)</button>
   </section>
 </main>
@@ -168,7 +173,7 @@ const API = "https://script.google.com/macros/s/AKfycbzwMvoZb4vWC25YxKxX38iw6YJL
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let cfg={tahun:[new Date().getFullYear()],aktif:new Date().getFullYear(),bus:{},wa:'',harga:'',infoBayar:''};
-let year=cfg.aktif,busId=null,pilih=null,taken={},mine=null,pin='',rowsAdmin=[],cfgDirty=false,pertama=true,sibuk=0;
+let year=cfg.aktif,busId=null,pilih=null,taken={},mine=null,pin='',rowsAdmin=[],cfgDirty=false,pertama=true,sibuk=0,pend={};
 try{pin=sessionStorage.getItem('pinBus')||'';}catch(e){}
 const busList=()=>cfg.bus[year]||(cfg.bus[year]=[{id:'bus1',nama:'Bus 1',tujuan:'',baris:10}]);
 const waNum=n=>{let d=String(n||'').replace(/\D/g,'');if(d.startsWith('0'))d='62'+d.slice(1);return d;};
@@ -284,7 +289,7 @@ $('adminBtn').onclick=()=>{
   $('adminLogin').classList.toggle('hide');
 };
 $('pinOk').onclick=async()=>{pin=$('pin').value;await masukAdmin();};
-$('keluar').onclick=()=>{pin='';try{sessionStorage.removeItem('pinBus');}catch(e){}$('admin').classList.add('hide');};
+$('keluar').onclick=()=>{pin='';pend={};tampilBar(false);try{sessionStorage.removeItem('pinBus');}catch(e){}$('admin').classList.add('hide');};
 async function masukAdmin(){
   try{
     const j=await api('daftar',{pin});rowsAdmin=j.rows;
@@ -311,36 +316,53 @@ function renderAdmin(){
     const b=busList()[+i.dataset.i];b[i.dataset.f]=i.dataset.f==='baris'?Math.max(1,Math.min(20,+i.value||1)):i.value;cfgDirty=true;});
   renderAdminList();
 }
+function tampilBar(fokus){
+  const n=Object.keys(pend).length,bar=$('statusBar');
+  if(!n){bar.classList.add('hide');return;}
+  const l=Object.values(pend);
+  $('statusInfo').innerHTML='<b>'+n+' perubahan belum disimpan:</b> '+l.map(x=>esc(x.bus)+' kursi '+x.no+' → <b>'+x.status+'</b>').join(', ')+'. Tekan <b>Simpan status</b> agar berlaku.';
+  bar.classList.remove('hide');
+  if(fokus){bar.scrollIntoView({behavior:'smooth',block:'center'});bar.classList.remove('flash');void bar.offsetWidth;bar.classList.add('flash');}
+}
+$('batalStatus').onclick=()=>{pend={};tampilBar(false);renderAdminList();$('adminMsg').className='msg';$('adminMsg').textContent='Perubahan dibatalkan.';};
+$('simpanStatus').onclick=async()=>{
+  const l=Object.values(pend);if(!l.length)return;
+  const m=$('adminMsg'),btn=$('simpanStatus');btn.disabled=true;btn.textContent='Menyimpan…';sibuk++;
+  let lunasTerakhir=null,gagal=[];
+  for(const x of l){
+    try{await api('status',{pin,bus:x.bus,no:x.no,status:x.status});
+      const row=rowsAdmin.find(r=>r.bus===x.bus&&r.no===x.no);if(row)row.status=x.status;
+      const k=x.bus+'-'+x.no;if(taken[k])taken[k].status=x.status;
+      if(x.status==='lunas')lunasTerakhir=x;
+    }catch(e){gagal.push(x.bus+' kursi '+x.no+': '+e.message);}
+  }
+  pend={};sibuk--;btn.disabled=false;btn.textContent='Simpan status';
+  tampilBar(false);renderAdminList();
+  if(gagal.length){m.className='msg err';m.textContent='Gagal menyimpan: '+gagal.join('; ');}
+  else{m.className='msg ok';m.textContent=lunasTerakhir?'Lunas tersimpan. Kursi '+lunasTerakhir.no+' kini abu-abu (terisi).':'Status tersimpan.';}
+  if(lunasTerakhir){busId=lunasTerakhir.bus;pilih=null;render();
+    $('grid').scrollIntoView({behavior:'smooth',block:'center'});
+    const sb=document.querySelector('.s[data-k="'+lunasTerakhir.no+'"]');if(sb)sb.classList.add('flash');}
+  else render();
+  await muat();await muatAdmin();
+};
 function renderAdminList(){
   const rows=[...rowsAdmin].sort((a,b)=>String(a.bus).localeCompare(String(b.bus))||a.no-b.no);
   $('cnt').textContent='('+rows.length+')';
   $('list').innerHTML='<tr><th>Bus</th><th>Kursi</th><th>Nama</th><th>Pondok</th><th>Status</th><th></th></tr>'+
     rows.map(r=>`<tr><td>${esc(r.bus)}</td><td>${r.no}</td><td>${esc(r.nama)}</td><td>${esc(r.pondok)}</td>
-    <td><select class="mini" data-st="${esc(r.bus)}|${r.no}">${['belum','lapor','lunas'].map(s=>`<option value="${s}" ${r.status===s?'selected':''}>${s}</option>`).join('')}</select></td>
+    <td><select class="mini" data-st="${esc(r.bus)}|${r.no}">${['belum','lapor','lunas'].map(s=>`<option value="${s}" ${((pend[r.bus+'|'+r.no]||{}).status||r.status)===s?'selected':''}>${s}</option>`).join('')}</select></td>
     <td><button class="link" data-del="${esc(r.bus)}|${r.no}">hapus</button></td></tr>`).join('');
-  document.querySelectorAll('[data-st]').forEach(x=>x.onchange=async()=>{
-    const [bus,no]=x.dataset.st.split('|'),key=bus+'-'+no,baru=x.value,m=$('adminMsg');
+  document.querySelectorAll('[data-st]').forEach(x=>x.onchange=()=>{
+    const key=x.dataset.st,[bus,no]=key.split('|');
     const row=rowsAdmin.find(r=>r.bus===bus&&String(r.no)===no),lama=row?row.status:'belum';
-    if(baru===lama)return;
-    sibuk++;x.disabled=true;
-    if(row)row.status=baru;if(taken[key])taken[key].status=baru;
-    m.className='msg';m.textContent='Menyimpan…';
-    if(baru==='lunas'){busId=bus;pilih=null;render();
-      $('grid').scrollIntoView({behavior:'smooth',block:'center'});
-      const sb=document.querySelector('.s[data-k="'+no+'"]');if(sb)sb.classList.add('flash');}
-    else render();
-    try{await api('status',{pin,bus,no:+no,status:baru});
-      m.className='msg ok';m.textContent=baru==='lunas'?'Lunas tersimpan. Kursi '+no+' ('+bus+') kini abu-abu (terisi).':'Status tersimpan: '+baru;
-    }catch(e){
-      if(row)row.status=lama;if(taken[key])taken[key].status=lama;x.value=lama;
-      m.className='msg err';m.textContent='Gagal menyimpan: '+e.message;render();
-    }
-    x.disabled=false;sibuk--;await muat();
+    if(x.value===lama)delete pend[key];else pend[key]={bus,no:+no,status:x.value,lama};
+    tampilBar(true);
   });
   document.querySelectorAll('[data-del]').forEach(x=>x.onclick=async()=>{
     if(!confirm('Hapus pesanan ini?'))return;
     const [bus,no]=x.dataset.del.split('|');
-    const key=bus+'-'+no,adaTaken=taken[key];sibuk++;
+    const key=bus+'-'+no,adaTaken=taken[key];sibuk++;delete pend[bus+'|'+no];tampilBar(false);
     delete taken[key];rowsAdmin=rowsAdmin.filter(r=>!(r.bus===bus&&String(r.no)===no));render();renderAdminList();
     $('adminMsg').className='msg';$('adminMsg').textContent='Menghapus…';
     try{await api('hapus',{pin,bus,no:+no});$('adminMsg').className='msg ok';$('adminMsg').textContent='Pesanan dihapus; kursi kosong kembali.';}
