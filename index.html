@@ -310,18 +310,22 @@ $('pesan').onclick=()=>{
 
 /* ===== Panel pengurus ===== */
 $('adminBtn').onclick=()=>{
-  if(pin){masukAdmin().then(()=>$('admin').scrollIntoView({behavior:'smooth',block:'start'}));return;}
-  const h=$('adminLogin').classList.toggle('hide');$('adminBtn').classList.toggle('on',!h);
-  if(!h){$('adminLogin').scrollIntoView({behavior:'smooth',block:'start'});$('pin').focus({preventScroll:true});}
+  const terbuka=!$('adminLogin').classList.contains('hide')||!$('admin').classList.contains('hide');
+  $('sopir').classList.add('hide');
+  if(terbuka){$('adminLogin').classList.add('hide');$('admin').classList.add('hide');tandaTile();return;}
+  if(pin){$('admin').classList.remove('hide');tandaTile();ke($('admin'));muatAdmin();return;}
+  $('adminLogin').classList.remove('hide');tandaTile();ke($('adminLogin'));$('pin').focus({preventScroll:true});
 };
+$('pin').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('pinOk').click();}});
+$('pinSopir').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('sopirOk').click();}});
 $('pinOk').onclick=async()=>{pin=$('pin').value;await masukAdmin();};
-$('keluar').onclick=()=>{pin='';pend={};tampilBar(false);try{sessionStorage.removeItem('pinBus');}catch(e){}$('admin').classList.add('hide');};
+$('keluar').onclick=()=>{pin='';pend={};tampilBar(false);try{sessionStorage.removeItem('pinBus');}catch(e){}$('admin').classList.add('hide');tandaTile();ke(document.querySelector('.aksi'),'center');};
 async function masukAdmin(){
   try{
     const j=await api('daftar',{pin});rowsAdmin=j.rows;
     try{sessionStorage.setItem('pinBus',pin);}catch(e){}
     $('adminLogin').classList.add('hide');$('admin').classList.remove('hide');$('pinMsg').textContent='';
-    renderAdmin();
+    renderAdmin();tandaTile();ke($('admin'));
   }catch(e){pin='';$('adminLogin').classList.remove('hide');$('pinMsg').textContent=e.message;}
 }
 async function muatAdmin(){try{const j=await api('daftar',{pin});rowsAdmin=j.rows;renderAdminList();}catch(e){$('adminMsg').className='msg err';$('adminMsg').textContent=e.message;}}
@@ -465,18 +469,26 @@ setInterval(()=>{if(!document.hidden)muatPosisi();},15000);
 
 /* ===== Sopir / pendamping ===== */
 let pinSopir='',watchId=null,lastKirim=0,wake=null;
-$('sopirBtn').onclick=()=>{const h=$('sopir').classList.toggle('hide');$('sopirBtn').classList.toggle('on',!h);if(!h)$('sopir').scrollIntoView({behavior:'smooth',block:'start'});};
+function ke(el,blok){el.scrollIntoView({behavior:'smooth',block:blok||'start'});}
+function tandaTile(){$('sopirBtn').classList.toggle('on',!$('sopir').classList.contains('hide'));$('adminBtn').classList.toggle('on',!$('adminLogin').classList.contains('hide')||!$('admin').classList.contains('hide'));}
+$('sopirBtn').onclick=()=>{
+  const buka=$('sopir').classList.contains('hide');
+  $('adminLogin').classList.add('hide');$('admin').classList.add('hide');
+  if(!buka){$('sopir').classList.add('hide');tandaTile();return;}
+  $('sopir').classList.remove('hide');tandaTile();ke($('sopir'));
+  if(!$('sopirLogin').classList.contains('hide'))$('pinSopir').focus({preventScroll:true});
+};
 $('sopirOk').onclick=async()=>{
   pinSopir=$('pinSopir').value;
   try{await api('loginSopir',{pin:pinSopir});
-    $('sopirLogin').classList.add('hide');$('sopirIsi').classList.remove('hide');$('sopirMsg').textContent='';
+    $('sopirLogin').classList.add('hide');$('sopirIsi').classList.remove('hide');$('sopirMsg').textContent='';ke($('sopirMulai'),'center');
     $('sopirBus').innerHTML=busList().map(b=>`<option value="${esc(b.id)}">${esc(b.nama)}${b.tujuan?' - '+esc(b.tujuan):''}</option>`).join('');
   }catch(e){$('sopirMsg').className='msg err';$('sopirMsg').textContent=e.message;}
 };
 async function kirimPos(pos){
   const now=Date.now();if(now-lastKirim<12000)return;lastKirim=now;
   try{await api('posisi',{pin:pinSopir,bus:$('sopirBus').value,lat:pos.coords.latitude,lng:pos.coords.longitude,akurasi:pos.coords.accuracy,kec:pos.coords.speed});
-    $('sopirMsg').className='msg ok';$('sopirMsg').textContent='Lokasi terkirim '+new Date().toLocaleTimeString('id-ID')+' (akurasi ±'+Math.round(pos.coords.accuracy)+' m)';
+    $('sopirMsg').className='msg ok';$('sopirMsg').textContent='Lokasi terkirim '+new Date().toLocaleTimeString('id-ID')+' (akurasi ±'+Math.round(pos.coords.accuracy)+' m)';muatPosisi();
   }catch(e){$('sopirMsg').className='msg err';$('sopirMsg').textContent=e.message;}
 }
 $('sopirMulai').onclick=async()=>{
@@ -486,6 +498,7 @@ $('sopirMulai').onclick=async()=>{
   watchId=navigator.geolocation.watchPosition(kirimPos,err=>{$('sopirMsg').className='msg err';$('sopirMsg').textContent='Lokasi tidak bisa dibaca: '+err.message+'. Izinkan akses lokasi di browser.';},{enableHighAccuracy:true,maximumAge:5000,timeout:20000});
   $('sopirMulai').disabled=true;$('sopirStop').disabled=false;$('sopirBus').disabled=true;
   $('sopirMsg').className='msg';$('sopirMsg').textContent='Mengambil lokasi…';
+  ke($('pantau'));
 };
 document.addEventListener('visibilitychange',async()=>{if(watchId!==null&&!document.hidden&&navigator.wakeLock){try{wake=await navigator.wakeLock.request('screen');}catch(e){}}});
 $('sopirStop').onclick=async()=>{
@@ -493,7 +506,7 @@ $('sopirStop').onclick=async()=>{
   try{if(wake){await wake.release();wake=null;}}catch(e){}
   try{await api('berhenti',{pin:pinSopir,bus:$('sopirBus').value});}catch(e){}
   $('sopirMulai').disabled=false;$('sopirStop').disabled=true;$('sopirBus').disabled=false;
-  $('sopirMsg').className='msg';$('sopirMsg').textContent='Berbagi lokasi dihentikan.';
+  $('sopirMsg').className='msg';$('sopirMsg').textContent='Berbagi lokasi dihentikan.';ke($('sopir'),'center');muatPosisi();
 };
 
 render();muat();
