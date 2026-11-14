@@ -74,7 +74,14 @@ select.mini{width:auto;padding:4px;font-size:13px}
 a.btn{display:block;text-decoration:none;text-align:center}
 </style>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<style>#peta{height:300px;border-radius:10px;border:1px solid var(--line);margin-top:8px;z-index:0}.posinfo{font-size:13px;margin-top:8px;line-height:1.6}.posinfo b{color:var(--g)}.busmark{background:var(--g);color:#fff;border:2px solid #fff;border-radius:14px;padding:2px 8px;font:700 12px Arial;white-space:nowrap;box-shadow:0 1px 5px rgba(0,0,0,.4)}</style>
+<style>#petaWrap{position:relative}
+#peta.statis{pointer-events:none;filter:grayscale(.55) brightness(.97)}
+#peta.statis .leaflet-control-zoom{display:none}
+#petaOverlay{position:absolute;inset:8px 0 0 0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:500;border-radius:10px;background:rgba(255,253,246,.55)}
+#petaOverlay.hide{display:none}
+#petaOverlay div{background:#fffdf6;border:1px solid var(--gold);border-radius:12px;padding:10px 14px;text-align:center;font-weight:700;font-size:13.5px;color:var(--g);box-shadow:0 2px 10px rgba(0,0,0,.2);max-width:80%}
+#petaOverlay small{display:block;font-weight:400;font-size:11.5px;color:#555;margin-top:3px}
+#peta{height:300px;border-radius:10px;border:1px solid var(--line);margin-top:8px;z-index:0}.posinfo{font-size:13px;margin-top:8px;line-height:1.6}.posinfo b{color:var(--g)}.busmark{background:var(--g);color:#fff;border:2px solid #fff;border-radius:14px;padding:2px 8px;font:700 12px Arial;white-space:nowrap;box-shadow:0 1px 5px rgba(0,0,0,.4)}</style>
 </head>
 <body>
 <header>
@@ -120,7 +127,7 @@ a.btn{display:block;text-decoration:none;text-align:center}
   <section class="card" id="pantau">
     <b>📍 Pantau posisi bus</b>
     <div class="mut">Untuk orang tua dan keluarga santri. Posisi diperbarui tiap beberapa detik saat bus dalam perjalanan.</div>
-    <div id="peta"></div>
+    <div id="petaWrap"><div id="peta" class="statis"></div><div id="petaOverlay"><div>🚌 Belum ada bus yang membagikan lokasi<small>Peta aktif otomatis saat sopir/pendamping mulai berbagi lokasi</small></div></div></div>
     <div class="posinfo" id="posinfo">Memuat posisi…</div>
   </section>
 
@@ -432,7 +439,14 @@ let peta=null,marks={},posAda=false,fitSekali=false;
 function initPeta(){
   if(peta||typeof L==='undefined')return;
   peta=L.map('peta',{zoomControl:true}).setView([-7.55,111.9],7);
+  petaInteraktif(false);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(peta);
+}
+function petaInteraktif(on){
+  if(!peta)return;
+  $('peta').classList.toggle('statis',!on);$('petaOverlay').classList.toggle('hide',on);
+  ['dragging','touchZoom','doubleClickZoom','scrollWheelZoom','boxZoom','keyboard','tap'].forEach(h=>{if(peta[h]){on?peta[h].enable():peta[h].disable();}});
+  if(on)setTimeout(()=>peta.invalidateSize(),50);
 }
 function lalu(ms){const s=Math.max(0,Math.round(ms/1000));if(s<60)return s+' detik lalu';if(s<3600)return Math.round(s/60)+' menit lalu';return Math.round(s/3600)+' jam lalu';}
 async function muatPosisi(){
@@ -456,9 +470,11 @@ async function muatPosisi(){
         pts.push([x.lat,x.lng]);
       }
     });
-    if(peta&&pts.length&&!fitSekali){peta.fitBounds(pts,{maxZoom:14,padding:[40,40]});fitSekali=pts.length>0;}
+    petaInteraktif(pts.length>0);
+    if(peta&&pts.length&&!fitSekali){peta.fitBounds(pts,{maxZoom:14,padding:[40,40]});fitSekali=true;}
+    if(peta&&!pts.length&&fitSekali){peta.setView([-7.55,111.9],7);fitSekali=false;}
     $('posinfo').innerHTML=info||'Belum ada bus.';
-  }catch(e){$('posinfo').textContent='Gagal memuat posisi. Cek sinyal.';}
+  }catch(e){$('posinfo').textContent='Gagal memuat posisi. Cek sinyal.';petaInteraktif(false);}
 }
 window.addEventListener('load',()=>{initPeta();muatPosisi();});
 setInterval(()=>{if(!document.hidden)muatPosisi();},15000);
