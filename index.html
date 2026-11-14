@@ -25,9 +25,9 @@ input,select{width:100%;padding:11px;border:1px solid var(--line);border-radius:
 button{font:inherit;cursor:pointer}
 .btn{background:var(--g);color:#fff;border:0;border-radius:8px;padding:12px 16px;font-weight:700;width:100%;margin-top:12px}
 .btn.sec{background:#fff;color:var(--g);border:1px solid var(--g)}
-#statusBar{position:sticky;bottom:8px;background:#fffdf6;border:2px solid var(--gold);border-radius:10px;padding:10px;margin-top:10px;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+#statusBar{background:#fffdf6;border:2px solid var(--gold);border-radius:10px;padding:10px;margin-top:10px}
+.btn.pulse{animation:fb 1s ease 3;background:var(--gold);color:#2b2108}
 #statusBar .btn{margin-top:6px}
-#statusBar.flash{animation:fb 1s ease 2}
 @keyframes fb{50%{box-shadow:0 0 0 6px rgba(201,163,90,.6)}}
 .btn.flash{animation:fb 1s ease 3;background:#25d366;color:#fff;border-color:#25d366}
 .aksi{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
@@ -172,11 +172,11 @@ a.btn{display:block;text-decoration:none;text-align:center}
     <div id="busEdit"></div>
     <button class="btn sec" id="addBus">+ Tambah bus</button>
     <button class="btn" id="saveCfg">Simpan pengaturan</button>
+    <div id="statusBar" class="hide"><div class="mut" id="statusInfo"></div><button class="btn sec" id="batalStatus" type="button">Batalkan perubahan status</button></div>
     <div class="msg" id="adminMsg"></div>
     <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
     <b>Daftar pemesan</b> <span class="mut" id="cnt"></span>
     <div style="overflow-x:auto"><table id="list"></table></div>
-    <div id="statusBar" class="hide"><div class="mut" id="statusInfo"></div><div class="row"><button class="btn sec" id="batalStatus">Batal</button><button class="btn" id="simpanStatus">Simpan semua</button></div></div>
     <button class="btn sec" id="salin">Salin daftar (CSV)</button>
   </section>
 </main>
@@ -348,19 +348,20 @@ function renderAdmin(){
 }
 function tandaiCfg(){cfgDirty=true;tampilBar(false);}
 function tampilBar(fokus){
-  const l=Object.values(pend),n=l.length,bar=$('statusBar');
-  if(!n&&!cfgDirty){bar.classList.add('hide');return;}
+  const l=Object.values(pend),n=l.length,bar=$('statusBar'),sv=$('saveCfg');
+  if(!n&&!cfgDirty){bar.classList.add('hide');sv.textContent='Simpan pengaturan';sv.classList.remove('pulse');return;}
   const bagian=[];
   if(n)bagian.push('<b>'+n+' status:</b> '+l.map(x=>esc(x.bus)+' kursi '+x.no+' → <b>'+x.status+'</b>').join(', '));
   if(cfgDirty)bagian.push('<b>pengaturan</b> berubah');
-  $('statusInfo').innerHTML='Belum disimpan: '+bagian.join(' dan ')+'. Satu kali tekan <b>Simpan semua</b> menyimpan semuanya.';
+  $('statusInfo').innerHTML='Belum disimpan: '+bagian.join(' dan ')+'. Tekan <b>Simpan pengaturan</b> di atas — status ikut tersimpan.';
   bar.classList.remove('hide');
-  if(fokus){bar.scrollIntoView({behavior:'smooth',block:'center'});bar.classList.remove('flash');void bar.offsetWidth;bar.classList.add('flash');}
+  sv.textContent=n?'Simpan pengaturan & status':'Simpan pengaturan';
+  if(fokus){sv.scrollIntoView({behavior:'smooth',block:'center'});sv.classList.remove('pulse');void sv.offsetWidth;sv.classList.add('pulse');}
 }
 $('batalStatus').onclick=()=>{pend={};tampilBar(false);renderAdminList();$('adminMsg').className='msg';$('adminMsg').textContent=cfgDirty?'Perubahan status dibatalkan (pengaturan masih belum disimpan).':'Perubahan dibatalkan.';};
-$('simpanStatus').onclick=async()=>{
-  const l=Object.values(pend);if(!l.length&&!cfgDirty)return;
-  const m=$('adminMsg'),btn=$('simpanStatus');btn.disabled=true;btn.textContent='Menyimpan…';sibuk++;
+$('saveCfg').onclick=async()=>{
+  const l=Object.values(pend);cfgDirty=true;
+  const m=$('adminMsg'),btn=$('saveCfg');btn.classList.remove('pulse');btn.disabled=true;btn.textContent='Menyimpan…';sibuk++;
   m.className='msg';m.textContent='Menyimpan…';
   /* langsung ubah tampilan kursi (sebelum server menjawab) */
   const lunasList=l.filter(x=>x.status==='lunas');
@@ -384,7 +385,7 @@ $('simpanStatus').onclick=async()=>{
       const k=x.bus+'-'+x.no;if(taken[k])taken[k].status=x.lama;const row=rowsAdmin.find(r=>r.bus===x.bus&&r.no===x.no);if(row)row.status=x.lama;
     }
   }
-  pend={};sibuk--;btn.disabled=false;btn.textContent='Simpan semua';
+  pend={};sibuk--;btn.disabled=false;btn.textContent='Simpan pengaturan';
   tampilBar(false);renderAdminList();render();
   if(gagal.length){m.className='msg err';m.textContent='Gagal menyimpan: '+gagal.join('; ')+' (kursi dikembalikan)';}
   else{m.className='msg ok';m.textContent=(cfgOk?'Pengaturan tersimpan (tahun aktif '+year+'). ':'')+(last?'Lunas tersimpan. Kursi '+last.no+' kini merah (terisi).':(l.length?'Status tersimpan.':''));}
@@ -420,11 +421,6 @@ $('addTahun').onclick=async()=>{const y=+$('tahunBaru').value;if(!(y>2000&&y<220
   if(!cfg.bus[y])cfg.bus[y]=JSON.parse(JSON.stringify(busList()));
   tandaiCfg();year=y;busId=null;mine=null;$('tahunBaru').value='';taken={};render();await muatAdmin();renderAdmin();};
 $('addBus').onclick=()=>{const l=busList();l.push({id:'bus'+(Date.now()%1e6),nama:'Bus '+(l.length+1),tujuan:'',baris:10});tandaiCfg();renderAdmin();render();};
-$('saveCfg').onclick=async()=>{
-  const m=$('adminMsg');
-  try{cfg.aktif=year;await api('simpanConfig',{pin,config:cfg});cfgDirty=false;tampilBar(false);m.className='msg ok';m.textContent='Tersimpan. Tahun aktif: '+year;}
-  catch(e){m.className='msg err';m.textContent=e.message;}
-};
 $('salin').onclick=async()=>{
   const rows=[...rowsAdmin].sort((a,b)=>String(a.bus).localeCompare(String(b.bus))||a.no-b.no);
   const csv='Bus,Kursi,Nama,Pondok,Status\n'+rows.map(r=>[r.bus,r.no,'"'+String(r.nama).replace(/"/g,'""')+'"',r.pondok,r.status].join(',')).join('\n');
