@@ -470,9 +470,13 @@ async function muatPosisi(){
         pts.push([x.lat,x.lng]);
       }
     });
-    petaInteraktif(pts.length>0);
-    if(peta&&pts.length&&!fitSekali){peta.fitBounds(pts,{maxZoom:14,padding:[40,40]});fitSekali=true;}
-    if(peta&&!pts.length&&fitSekali){peta.setView([-7.55,111.9],7);fitSekali=false;}
+    const segar=j.pos.filter(x=>j.now-x.ts<=10*60*1000);
+    petaInteraktif(segar.length>0);
+    const ov=$('petaOverlay').firstChild;
+    ov.innerHTML=j.pos.length&&!segar.length?'🚌 Pembagian lokasi sedang terhenti<small>Peta aktif lagi saat sopir/pendamping melanjutkan berbagi lokasi</small>':'🚌 Belum ada bus yang membagikan lokasi<small>Peta aktif otomatis saat sopir/pendamping mulai berbagi lokasi</small>';
+    const ptsSegar=segar.map(x=>[x.lat,x.lng]);
+    if(peta&&ptsSegar.length&&!fitSekali){peta.fitBounds(ptsSegar,{maxZoom:14,padding:[40,40]});fitSekali=true;}
+    if(peta&&!ptsSegar.length&&fitSekali){peta.setView([-7.55,111.9],7);fitSekali=false;}
     $('posinfo').innerHTML=info||'Belum ada bus.';
   }catch(e){$('posinfo').textContent='Gagal memuat posisi. Cek sinyal.';petaInteraktif(false);}
 }
