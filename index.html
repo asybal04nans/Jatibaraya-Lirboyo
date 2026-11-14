@@ -194,7 +194,7 @@ a.btn{display:block;text-decoration:none;text-align:center}
         <select id="filterDaftar" class="mini" style="width:auto"><option value="semua">Semua</option><option value="lunas">Lunas saja</option><option value="belum">Belum lunas</option></select></div>
       <pre id="daftarTeks"></pre>
       <button class="btn" id="waShare" type="button" style="background:#25d366">Bagikan ke WhatsApp (grup)</button>
-      <div class="row" style="margin-top:8px"><button class="btn sec" id="salinTeks" type="button" style="margin-top:0">Salin teks</button><button class="btn sec" id="unduhCsv" type="button" style="margin-top:0">Unduh CSV</button><button class="btn sec" id="tutupDaftar" type="button" style="margin-top:0">Tutup</button></div>
+      <div class="row" style="margin-top:8px"><button class="btn sec" id="salinTeks" type="button" style="margin-top:0">Salin teks</button><button class="btn sec" id="tutupDaftar" type="button" style="margin-top:0">Tutup</button></div>
       <div class="msg" id="daftarMsg"></div>
     </div>
   </section>
@@ -462,9 +462,6 @@ function teksDaftar(filter){
   s+='\nTotal '+all.length+' pesanan: ✅ lunas '+l+', ⏳ menunggu verifikasi '+w+', ❌ belum bayar '+(all.length-l-w)+'\n(✅ lunas · ⏳ sudah lapor bayar · ❌ belum bayar)';
   return s;
 }
-function csvDaftar(filter){
-  return 'Bus,Kursi,Nama,Pondok,Status\n'+barisDaftar(filter).map(r=>[r.bus,r.no,'"'+String(r.nama).replace(/"/g,'""')+'"',r.pondok,r.status].join(',')).join('\n');
-}
 async function salinKeClipboard(teks){
   try{await Promise.race([navigator.clipboard.writeText(teks),new Promise((_,no)=>setTimeout(no,1200))]);return true;}catch(e){}
   try{const ta=document.createElement('textarea');ta.value=teks;ta.style.cssText='position:fixed;left:-9999px;top:0';document.body.appendChild(ta);ta.focus();ta.select();const ok=document.execCommand('copy');document.body.removeChild(ta);return ok;}catch(e){return false;}
@@ -489,10 +486,6 @@ $('salinTeks').onclick=async()=>{
   const b=$('salinTeks'),ok=await salinKeClipboard(teksDaftar($('filterDaftar').value));
   b.textContent=ok?'✔ Tersalin':'Gagal, salin manual';setTimeout(()=>b.textContent='Salin teks',2200);
   if(!ok){const r=document.createRange();r.selectNodeContents($('daftarTeks'));const s=getSelection();s.removeAllRanges();s.addRange(r);}
-};
-$('unduhCsv').onclick=()=>{
-  const u=URL.createObjectURL(new Blob(['﻿'+csvDaftar($('filterDaftar').value)],{type:'text/csv;charset=utf-8'}));
-  const a=document.createElement('a');a.href=u;a.download='pesanan-bus-'+year+'.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);
 };
 
 /* ===== Pantau posisi bus ===== */
