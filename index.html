@@ -161,7 +161,7 @@ a.btn{display:block;text-decoration:none;text-align:center}
     <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
     <b>Daftar pemesan</b> <span class="mut" id="cnt"></span>
     <div style="overflow-x:auto"><table id="list"></table></div>
-    <div id="statusBar" class="hide"><div class="mut" id="statusInfo"></div><div class="row"><button class="btn sec" id="batalStatus">Batal</button><button class="btn" id="simpanStatus">Simpan status</button></div></div>
+    <div id="statusBar" class="hide"><div class="mut" id="statusInfo"></div><div class="row"><button class="btn sec" id="batalStatus">Batal</button><button class="btn" id="simpanStatus">Simpan semua</button></div></div>
     <button class="btn sec" id="salin">Salin daftar (CSV)</button>
   </section>
 </main>
@@ -311,11 +311,11 @@ async function masukAdmin(){
 async function muatAdmin(){try{const j=await api('daftar',{pin});rowsAdmin=j.rows;renderAdminList();}catch(e){$('adminMsg').className='msg err';$('adminMsg').textContent=e.message;}}
 function renderAdmin(){
   $('cfgWa').value=cfg.wa||'';$('cfgHarga').value=cfg.harga||'';$('cfgBayar').value=cfg.infoBayar||'';
-  $('cfgWa').oninput=e=>{cfg.wa=e.target.value;cfgDirty=true;};
-  $('cfgHarga').oninput=e=>{cfg.harga=e.target.value;cfgDirty=true;};
+  $('cfgWa').oninput=e=>{cfg.wa=e.target.value;tandaiCfg();};
+  $('cfgHarga').oninput=e=>{cfg.harga=e.target.value;tandaiCfg();};
   $('cfgPondok').value=(cfg.pondok||[]).join(', ');
-  $('cfgPondok').oninput=e=>{cfg.pondok=e.target.value.split(',').map(x=>x.trim()).filter(Boolean);cfgDirty=true;};
-  $('cfgBayar').oninput=e=>{cfg.infoBayar=e.target.value;cfgDirty=true;};
+  $('cfgPondok').oninput=e=>{cfg.pondok=e.target.value.split(',').map(x=>x.trim()).filter(Boolean);tandaiCfg();};
+  $('cfgBayar').oninput=e=>{cfg.infoBayar=e.target.value;tandaiCfg();};
   $('selTahun').innerHTML=cfg.tahun.map(t=>`<option ${t==year?'selected':''}>${t}</option>`).join('');
   $('busEdit').innerHTML=busList().map((b,i)=>`<div class="row" style="margin-bottom:6px">
     <input data-i="${i}" data-f="nama" value="${esc(b.nama)}" placeholder="Nama bus">
@@ -323,22 +323,29 @@ function renderAdmin(){
     <input data-i="${i}" data-f="baris" value="${b.baris}" inputmode="numeric" style="width:70px" title="Jumlah baris (4 kursi/baris)"></div>`).join('')+
     '<div class="mut">Kolom ketiga = jumlah baris (×4 kursi). Bus besar umumnya 10–12 baris.</div>';
   document.querySelectorAll('#busEdit input').forEach(i=>i.oninput=()=>{
-    const b=busList()[+i.dataset.i];b[i.dataset.f]=i.dataset.f==='baris'?Math.max(1,Math.min(20,+i.value||1)):i.value;cfgDirty=true;});
+    const b=busList()[+i.dataset.i];b[i.dataset.f]=i.dataset.f==='baris'?Math.max(1,Math.min(20,+i.value||1)):i.value;tandaiCfg();});
   renderAdminList();
 }
+function tandaiCfg(){cfgDirty=true;tampilBar(false);}
 function tampilBar(fokus){
-  const n=Object.keys(pend).length,bar=$('statusBar');
-  if(!n){bar.classList.add('hide');return;}
-  const l=Object.values(pend);
-  $('statusInfo').innerHTML='<b>'+n+' perubahan belum disimpan:</b> '+l.map(x=>esc(x.bus)+' kursi '+x.no+' → <b>'+x.status+'</b>').join(', ')+'. Tekan <b>Simpan status</b> agar berlaku.';
+  const l=Object.values(pend),n=l.length,bar=$('statusBar');
+  if(!n&&!cfgDirty){bar.classList.add('hide');return;}
+  const bagian=[];
+  if(n)bagian.push('<b>'+n+' status:</b> '+l.map(x=>esc(x.bus)+' kursi '+x.no+' → <b>'+x.status+'</b>').join(', '));
+  if(cfgDirty)bagian.push('<b>pengaturan</b> berubah');
+  $('statusInfo').innerHTML='Belum disimpan: '+bagian.join(' dan ')+'. Satu kali tekan <b>Simpan semua</b> menyimpan semuanya.';
   bar.classList.remove('hide');
   if(fokus){bar.scrollIntoView({behavior:'smooth',block:'center'});bar.classList.remove('flash');void bar.offsetWidth;bar.classList.add('flash');}
 }
-$('batalStatus').onclick=()=>{pend={};tampilBar(false);renderAdminList();$('adminMsg').className='msg';$('adminMsg').textContent='Perubahan dibatalkan.';};
+$('batalStatus').onclick=()=>{pend={};tampilBar(false);renderAdminList();$('adminMsg').className='msg';$('adminMsg').textContent=cfgDirty?'Perubahan status dibatalkan (pengaturan masih belum disimpan).':'Perubahan dibatalkan.';};
 $('simpanStatus').onclick=async()=>{
-  const l=Object.values(pend);if(!l.length)return;
+  const l=Object.values(pend);if(!l.length&&!cfgDirty)return;
   const m=$('adminMsg'),btn=$('simpanStatus');btn.disabled=true;btn.textContent='Menyimpan…';sibuk++;
-  let lunasTerakhir=null,gagal=[];
+  let lunasTerakhir=null,gagal=[],cfgOk=false;
+  if(cfgDirty){
+    try{cfg.aktif=year;await api('simpanConfig',{pin,config:cfg});cfgDirty=false;cfgOk=true;}
+    catch(e){gagal.push('pengaturan: '+e.message);}
+  }
   for(const x of l){
     try{await api('status',{pin,bus:x.bus,no:x.no,status:x.status});
       const row=rowsAdmin.find(r=>r.bus===x.bus&&r.no===x.no);if(row)row.status=x.status;
@@ -346,10 +353,10 @@ $('simpanStatus').onclick=async()=>{
       if(x.status==='lunas')lunasTerakhir=x;
     }catch(e){gagal.push(x.bus+' kursi '+x.no+': '+e.message);}
   }
-  pend={};sibuk--;btn.disabled=false;btn.textContent='Simpan status';
+  pend={};sibuk--;btn.disabled=false;btn.textContent='Simpan semua';
   tampilBar(false);renderAdminList();
   if(gagal.length){m.className='msg err';m.textContent='Gagal menyimpan: '+gagal.join('; ');}
-  else{m.className='msg ok';m.textContent=lunasTerakhir?'Lunas tersimpan. Kursi '+lunasTerakhir.no+' kini merah (terisi).':'Status tersimpan.';}
+  else{m.className='msg ok';m.textContent=(cfgOk?'Pengaturan tersimpan (tahun aktif '+year+'). ':'')+(lunasTerakhir?'Lunas tersimpan. Kursi '+lunasTerakhir.no+' kini merah (terisi).':(l.length?'Status tersimpan.':''));}
   if(lunasTerakhir){busId=lunasTerakhir.bus;pilih=null;render();
     $('grid').scrollIntoView({behavior:'smooth',block:'center'});
     const sb=document.querySelector('.s[data-k="'+lunasTerakhir.no+'"]');if(sb)sb.classList.add('flash');}
@@ -384,11 +391,11 @@ $('selTahun').onchange=async()=>{year=+$('selTahun').value;busId=null;pilih=null
 $('addTahun').onclick=async()=>{const y=+$('tahunBaru').value;if(!(y>2000&&y<2200))return;
   if(!cfg.tahun.includes(y)){cfg.tahun.push(y);cfg.tahun.sort();}
   if(!cfg.bus[y])cfg.bus[y]=JSON.parse(JSON.stringify(busList()));
-  cfgDirty=true;year=y;busId=null;mine=null;$('tahunBaru').value='';taken={};render();await muatAdmin();renderAdmin();};
-$('addBus').onclick=()=>{const l=busList();l.push({id:'bus'+(Date.now()%1e6),nama:'Bus '+(l.length+1),tujuan:'',baris:10});cfgDirty=true;renderAdmin();render();};
+  tandaiCfg();year=y;busId=null;mine=null;$('tahunBaru').value='';taken={};render();await muatAdmin();renderAdmin();};
+$('addBus').onclick=()=>{const l=busList();l.push({id:'bus'+(Date.now()%1e6),nama:'Bus '+(l.length+1),tujuan:'',baris:10});tandaiCfg();renderAdmin();render();};
 $('saveCfg').onclick=async()=>{
   const m=$('adminMsg');
-  try{cfg.aktif=year;await api('simpanConfig',{pin,config:cfg});cfgDirty=false;m.className='msg ok';m.textContent='Tersimpan. Tahun aktif: '+year;}
+  try{cfg.aktif=year;await api('simpanConfig',{pin,config:cfg});cfgDirty=false;tampilBar(false);m.className='msg ok';m.textContent='Tersimpan. Tahun aktif: '+year;}
   catch(e){m.className='msg err';m.textContent=e.message;}
 };
 $('salin').onclick=async()=>{
